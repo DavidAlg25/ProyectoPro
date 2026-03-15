@@ -1,4 +1,3 @@
-import { act } from 'react';
 import { connect } from '../config/db/connect.js';
 import { encryptPassword } from '../library/appBcrypt.js';
 
@@ -42,7 +41,7 @@ class UserModel {
       if (!login || !password || !email || !image_url || !activated || !lang_key || !activation_key || !reset_key || !reset_date || !created_by || !last_modify_by) {
         return res.status(400).json({ error: "Missing required fields" });
       }
-      let sqlQuery = "UPDATE user SET user_id=? ,login=?,password=?,email=?,image_url=?,activated=?,lang_key=?,activation_key=?,reset_key=?,reset_date=?,created_by=?,last_modified_by=?,updatedAt=? WHERE user_id= ?";
+      let sqlQuery = "UPDATE user SET login=?,password=?,email=?,image_url=?,activated=?,lang_key=?,activation_key=?,reset_key=?,reset_date=?,created_by=?,last_modified_by=?,updatedAt=? WHERE user_id= ?";
       const updated_at = new Date().toLocaleString("en-CA", { timeZone: "America/Bogota" }).replace(",", "").replace("/", "-").replace("/", "-");
       const [result] = await connect.query(sqlQuery, [login, password, email, image_url, activated, lang_key, activation_key, reset_key, reset_date, created_by, last_modify_by, updated_at, req.params.id]);
       if (result.affectedRows === 0) return res.status(404).json({ error: "user not found" });

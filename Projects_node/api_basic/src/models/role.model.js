@@ -13,7 +13,7 @@ class RoleModel {
       if (!name || !description) {
         return res.status(400).json({ error: "Missing required fields" });
       }
-      let sqlQuery = "INSERT INTO role (role_name,role_description) VALUES (?,?)";
+      let sqlQuery = "INSERT INTO role (role_id,role_name,role_description) VALUES (?,?)";
       const [result] = await connect.query(sqlQuery, [name, description]);
       res.status(201).json({
         data: [{ id: result.insertId, name, description }],
@@ -30,8 +30,7 @@ class RoleModel {
       if (!name || !description) {
         return res.status(400).json({ error: "Missing required fields" });
       }
-      let sqlQuery = "UPDATE role SET role_name=?,role_description=?,update_at=? WHERE role_id= ?";
-      const update_at = new Date().toLocaleString("en-CA", { timeZone: "America/Bogota" }).replace(",", "").replace("/", "-").replace("/", "-");
+      let sqlQuery = "UPDATE role SET role_name=?,role_description=? WHERE role_id= ?";
       const [result] = await connect.query(sqlQuery, [name, description, update_at, req.params.id]);
       if (result.affectedRows === 0) return res.status(404).json({ error: "Role not found" });
       res.status(200).json({
