@@ -1,16 +1,17 @@
 import {Router} from 'express';
 import {showOrderDetail,showOrderDetailId,addOrderDetail,updateOrderDetail,deleteOrderDetail} from '../controllers/orderDetail.controller.js';
+import { verifyToken } from '../middleware/authMiddleware.js';
 
 const router=Router();
 const apiName='/orderDetail';
 
 router.route(apiName)
-  .get(showOrderDetail)  // Get all OrderDetail
-  .post(addOrderDetail); // Add OrderDetail
+  .get(verifyToken, showOrderDetail)  // Get all OrderDetail
+  .post(verifyToken, addOrderDetail); // Add OrderDetail
 
 router.route(`${apiName}/:id`)
-  .get(showOrderDetailId)  // Get OrderDetail by Id
-  .put(updateOrderDetail)  // Update OrderDetail by Id
-  .delete(deleteOrderDetail); // Delete OrderDetail by Id
+  .get(verifyToken, showOrderDetailId)  // Get OrderDetail by Id
+  .put(verifyToken, updateOrderDetail)  // Update OrderDetail by Id
+  .delete(verifyToken, deleteOrderDetail); // Delete OrderDetail by Id
 
 export default router;
