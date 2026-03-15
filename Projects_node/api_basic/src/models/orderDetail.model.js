@@ -15,7 +15,7 @@ class OrderDetailModel {
       if (!order || !variant || !quantity || !unitPrice) {
         return res.status(400).json({ error: "Missing required fields" });
       }
-      let sqlQuery = "INSERT INTO orderdetail (oder_detail_id,order_id,variant_FK,order_detail_quantity,order_detail_unit_price) VALUES (?,?,?,?,?)";
+      let sqlQuery = "INSERT INTO orderdetail (order_detail_id,order_id,variant_FK,order_detail_quantity,order_detail_unit_price) VALUES (?,?,?,?,?)";
       const [result] = await connect.query(sqlQuery, [order, variant, quantity, unitPrice]);
       res.status(201).json({
         data: [{ id: result.insertId, order, variant, quantity, unitPrice }],
