@@ -25,7 +25,6 @@ const NAME_API = '/api/v1';
 app.use(express.json());
 
 // Routes for the API
-app.use(NAME_API, use);
 app.use(NAME_API, authRoutes);
 app.use(NAME_API, cartItemRoutes);
 app.use(NAME_API, inventoryMovementRoutes);
