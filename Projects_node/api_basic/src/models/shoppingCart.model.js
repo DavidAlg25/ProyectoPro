@@ -13,7 +13,7 @@ class ShoppingCartModel {
       if (!shoppingCart_status || !customer) {
         return res.status(400).json({ error: "Missing required fields" });
       }
-      let sqlQuery = "INSERT INTO shoppingcart (shoppinCart_id,shoppingCart_status,cusumer_FK) VALUES (?,?,?)";
+      let sqlQuery = "INSERT INTO shoppingcart (shoppinCart_id,shoppingCart_status,customer_FK) VALUES (?,?,?)";
       const [result] = await connect.query(sqlQuery, [shoppingCart_status, customer]);
       res.status(201).json({
         data: [{ id: result.insertId, shoppingCart_status, customer }],
