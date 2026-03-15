@@ -31,8 +31,7 @@ class UserAuthorityModel {
         return res.status(400).json({ error: "Missing required fields" });
       }
       let sqlQuery = "UPDATE userauthority SET user_FK=?,role_FK=? WHERE userAuthority_id= ?";
-      const updated_at = new Date().toLocaleString("en-CA", { timeZone: "America/Bogota" }).replace(",", "").replace("/", "-").replace("/", "-");
-      const [result] = await connect.query(sqlQuery, [user, role, updated_at, req.params.id]);
+      const [result] = await connect.query(sqlQuery, [user, role, req.params.id]);
       if (result.affectedRows === 0) return res.status(404).json({ error: "userAuthority not found" });
       res.status(200).json({
         data: [{ user, role}],
