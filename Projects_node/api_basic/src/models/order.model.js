@@ -1,24 +1,23 @@
 import { connect } from '../config/db/connect.js';
 
 class OrderModel {
-  constructor(id, customer, date, order_status, totalAmount) {
+  constructor(id, customer, order_status, totalAmount) {
     this.id = id;
     this.customer = customer;
-    this.date = date;
     this.order_status = order_status;
     this.totalAmount =totalAmount;
   }
 
   async addOrder(req, res) {
     try {
-      const { customer, date, order_status, totalAmount } = req.body;
-      if (!customer || !date || !order_status || !totalAmount) {
+      const { customer, order_status, totalAmount } = req.body;
+      if (!customer || !order_status || !totalAmount) {
         return res.status(400).json({ error: "Missing required fields" });
       }
-      let sqlQuery = "INSERT INTO order (order_id,customer_FK,order_date,order_status,order_total_amount) VALUES (?,?,?,?,?)";
-      const [result] = await connect.query(sqlQuery, [customer, date, order_status, totalAmount]);
+      let sqlQuery = "INSERT INTO order (order_id,customer_FK,order_status,order_total_amount) VALUES (?,?,?,?)";
+      const [result] = await connect.query(sqlQuery, [customer, order_status, totalAmount]);
       res.status(201).json({
-        data: [{ id: result.insertId, customer, date, order_status, totalAmount }],
+        data: [{ id: result.insertId, customer, order_status, totalAmount }],
         status: 201
       });
     } catch (error) {
@@ -28,16 +27,16 @@ class OrderModel {
 
   async updateOrder(req, res) {
     try {
-      const { customer, date, order_status, totalAmount } = req.body;
-      if (!customer || !date || !order_status || !totalAmount) {
+      const { customer, order_status, totalAmount } = req.body;
+      if (!customer || !order_status || !totalAmount) {
         return res.status(400).json({ error: "Missing required fields" });
       }
-      let sqlQuery = "UPDATE order SET customer_FK=?,order_date=?,order_status=?,order_total_amount=?,updatedAt=? WHERE order_id= ?";
+      let sqlQuery = "UPDATE order SET customer_FK=?,order_status=?,order_total_amount=?,updatedAt=? WHERE order_id= ?";
       const update_at = new Date().toLocaleString("en-CA", { timeZone: "America/Bogota" }).replace(",", "").replace("/", "-").replace("/", "-");
-      const [result] = await connect.query(sqlQuery, [customer, date, order_status, totalAmount, update_at, req.params.id]);
+      const [result] = await connect.query(sqlQuery, [customer, order_status, totalAmount, update_at, req.params.id]);
       if (result.affectedRows === 0) return res.status(404).json({ error: "Order not found" });
       res.status(200).json({
-        data: [{ customer, date, order_status, totalAmount, update_at }],
+        data: [{ customer, order_status, totalAmount, update_at }],
         status: 200,
         updated: result.affectedRows
       });
