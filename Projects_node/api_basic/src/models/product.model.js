@@ -3,7 +3,7 @@ import { connect } from '../config/db/connect.js';
 class ProductModel {
   constructor(id, code, name, description, category, product_status, image_url) {
     this.id = id;
-    this.product = code;
+    this.code = code;
     this.name = name;
     this.description = description;
     this.category = category;
