@@ -44,7 +44,7 @@ class RoleModel {
     }
   }
 
-  async deleteRRole(req, res) {
+  async deleteRole(req, res) {
     try {
       let sqlQuery = "DELETE FROM role WHERE role_id = ?";
       const [result] = await connect.query(sqlQuery, [req.params.id]);

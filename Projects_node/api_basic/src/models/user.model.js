@@ -3,7 +3,7 @@ import { connect } from '../config/db/connect.js';
 import { encryptPassword } from '../library/appBcrypt.js';
 
 class UserModel {
-  constructor(id, login, password, email, image_url, activated, lang_key, activation_key, reset_key, created_by, last_modify_by) {
+  constructor(id, login, password, email, image_url, activated, lang_key, activation_key, reset_key, reset_date, created_by, last_modify_by) {
     this.id = id;
     this.login = login;
     this.password = password;
@@ -13,20 +13,22 @@ class UserModel {
     this.lang_key = lang_key;
     this.activation_key = activation_key;
     this.reset_key = reset_key;
-    this.password = password;
+    this.reset_date = reset_date;
+    this.created_by = created_by;
+    this.last_modify_by = last_modify_by;
   }
 
   async addUser(req, res) {
     try {
-      const { user, email, password, status, role } = req.body;
-      if (!user || !email || !password || !status || !role) {
+      const { login, password, email, image_url, activated, lang_key, activation_key, reset_key, reset_date, created_by, last_modify_by } = req.body;
+      if (!login || !password || !email || !image_url || !activated || !lang_key || !activation_key || !reset_key || !reset_date || !created_by || !last_modify_by) {
         return res.status(400).json({ error: "Missing required fields" });
       }
       const hashedPassword = await encryptPassword(password);
-      let sqlQuery = "INSERT INTO users (User_user,User_email,User_password,User_status_fk,Roles_fk ) VALUES (?,?,?,?,?)";
-      const [result] = await connect.query(sqlQuery, [user, email, hashedPassword, status, role]);
+      let sqlQuery = "INSERT INTO user (user_id,login,password,email,image_url,activated,lang_key,activation_key,reset_key,reset_date,created_by,last_modified_by ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)";
+      const [result] = await connect.query(sqlQuery, [login, hashedPassword, email, image_url, activated, lang_key, activation_key, reset_key, reset_date, created_by, last_modify_by]);
       res.status(201).json({
-        data: [{ id: result.insertId, user, hashedPassword, status, role }],
+        data: [{ id: result.insertId, login, hashedPassword, email, image_url, activated, lang_key, activation_key, reset_key, reset_date, created_by, last_modify_by }],
         status: 201
       });
     } catch (error) {
@@ -36,16 +38,16 @@ class UserModel {
 
   async updateUser(req, res) {
     try {
-      const { user, status, role } = req.body;
-      if (!user || !status || !role) {
+      const { login, password, email, image_url, activated, lang_key, activation_key, reset_key, reset_date, created_by, last_modify_by } = req.body;
+      if (!login || !password || !email || !image_url || !activated || !lang_key || !activation_key || !reset_key || !reset_date || !created_by || !last_modify_by) {
         return res.status(400).json({ error: "Missing required fields" });
       }
-      let sqlQuery = "UPDATE users SET User_user=?,User_status_fk=?,Roles_fk  =?,updated_at=? WHERE User_id= ?";
+      let sqlQuery = "UPDATE user SET user_id=? ,login=?,password=?,email=?,image_url=?,activated=?,lang_key=?,activation_key=?,reset_key=?,reset_date=?,created_by=?,last_modified_by=?,updatedAt=? WHERE user_id= ?";
       const updated_at = new Date().toLocaleString("en-CA", { timeZone: "America/Bogota" }).replace(",", "").replace("/", "-").replace("/", "-");
-      const [result] = await connect.query(sqlQuery, [user, status, role, updated_at, req.params.id]);
+      const [result] = await connect.query(sqlQuery, [login, password, email, image_url, activated, lang_key, activation_key, reset_key, reset_date, created_by, last_modify_by, updated_at, req.params.id]);
       if (result.affectedRows === 0) return res.status(404).json({ error: "user not found" });
       res.status(200).json({
-        data: [{ user, status, role, updated_at }],
+        data: [{ login, email, image_url, activated, lang_key, activation_key, reset_key, reset_date, created_by, last_modify_by, updated_at }],
         status: 200,
         updated: result.affectedRows
       });
@@ -56,7 +58,7 @@ class UserModel {
 
   async deleteUser(req, res) {
     try {
-      let sqlQuery = "DELETE FROM users WHERE User_id = ?";
+      let sqlQuery = "DELETE FROM user WHERE user_id = ?";
       const [result] = await connect.query(sqlQuery, [req.params.id]);
       if (result.affectedRows === 0) return res.status(404).json({ error: "user not found" });
       res.status(200).json({
@@ -71,7 +73,7 @@ class UserModel {
 
   async showUser(res) {
     try {
-      let sqlQuery = "SELECT * FROM users";
+      let sqlQuery = "SELECT * FROM user";
       const [result] = await connect.query(sqlQuery);
       res.status(200).json(result);
     } catch (error) {
@@ -81,7 +83,7 @@ class UserModel {
 
   async showUserById(res, req) {
     try {
-      const [result] = await connect.query('SELECT * FROM users WHERE User_id = ?', [req.params.id]);
+      const [result] = await connect.query('SELECT * FROM user WHERE user_id = ?', [req.params.id]);
       if (result.length === 0) return res.status(404).json({ error: "user not found" });
       res.status(200).json(result[0]);
     } catch (error) {
