@@ -1,8 +1,21 @@
 import express from 'express';
-import userRoutes from '../routes/user.routes.js';
-
+import authRoutes from '../routes/auth.routes.js';
+import cartItemRoutes from '../routes/cartItem.routes.js';
+import inventoryMovementRoutes from '../routes/inventoryMovement.routes.js';
+import invoiceRoutes from '../routes/invoice.routes.js';
+import invoiceDetailRoutes from '../routes/invoiceDetail.routes.js';
+import orderRoutes from '../routes/order.routes.js';
+import orderDetailRoutes from '../routes/orderDetail.routes.js';
+import paymentRoutes from '../routes/payment.routes.js';
+import productRoutes from '../routes/product.routes.js';
+import productPromotionRoutes from '../routes/productPromotion.routes.js';
+import productVariantRoutes from '../routes/productVariant.routes.js';
+import purchaseDetailRoutes from '../routes/purchaseDetail.routes.js';
+import purchaseOrderRoutes from '../routes/purchaseOrder.routes.js';
 import roleRoutes from '../routes/role.routes.js';
-import userApiRoutes from '../routes/apiUser.routes.js';
+import shoppingCartRoutes from '../routes/shoppingCart.routes.js';
+import userRoutes from '../routes/user.routes.js';
+import userAuthorityRoutes from '../routes/userAuthority.routes.js';
 
 // Create an instance of the Express application
 const app = express();
@@ -12,10 +25,24 @@ const NAME_API = '/api/v1';
 app.use(express.json());
 
 // Routes for the API
-app.use(NAME_API, userRoutes);
-app.use(NAME_API, userStatusRoutes);
+app.use(NAME_API, use);
+app.use(NAME_API, authRoutes);
+app.use(NAME_API, cartItemRoutes);
+app.use(NAME_API, inventoryMovementRoutes);
+app.use(NAME_API, invoiceRoutes);
+app.use(NAME_API, invoiceDetailRoutes);
+app.use(NAME_API, orderRoutes);
+app.use(NAME_API, orderDetailRoutes);
+app.use(NAME_API, paymentRoutes);
+app.use(NAME_API, productRoutes);
+app.use(NAME_API, productPromotionRoutes);
+app.use(NAME_API, productVariantRoutes);
+app.use(NAME_API, purchaseDetailRoutes);
+app.use(NAME_API, purchaseOrderRoutes);
 app.use(NAME_API, roleRoutes);
-app.use(NAME_API, userApiRoutes);
+app.use(NAME_API, shoppingCartRoutes);
+app.use(NAME_API, userRoutes);
+app.use(NAME_API, userAuthorityRoutes);
 
 // Handle 404 errors for undefined routes
 app.use((req, res, next) => {
