@@ -13,7 +13,7 @@ class ProductPromotionModel {
       if (!variant || !promotion) {
         return res.status(400).json({ error: "Missing required fields" });
       }
-      let sqlQuery = "INSERT INTO productpromotion (productPromotion_id,variant_FK,variant,promotion_FK) VALUES (?,?,?)";
+      let sqlQuery = "INSERT INTO productpromotion (productPromotion_id,variant_FK,promotion_FK) VALUES (?,?,?)";
       const [result] = await connect.query(sqlQuery, [ variant, promotion ]);
       res.status(201).json({
         data: [{ id: result.insertId, variant, promotion  }],
