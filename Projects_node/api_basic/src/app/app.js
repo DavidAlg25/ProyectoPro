@@ -17,6 +17,7 @@ import purchaseDetailRoutes from '../routes/purchaseDetail.routes.js';
 import purchaseOrderRoutes from '../routes/purchaseOrder.routes.js';
 import roleRoutes from '../routes/role.routes.js';
 import shoppingCartRoutes from '../routes/shoppingCart.routes.js';
+import supplierRoutes from '../routes/supplier.routes.js';
 import userRoutes from '../routes/user.routes.js';
 import userAuthorityRoutes from '../routes/userAuthority.routes.js';
 
@@ -46,6 +47,7 @@ app.use(NAME_API, purchaseDetailRoutes);
 app.use(NAME_API, purchaseOrderRoutes);
 app.use(NAME_API, roleRoutes);
 app.use(NAME_API, shoppingCartRoutes);
+app.use(NAME_API, supplierRoutes);
 app.use(NAME_API, userRoutes);
 app.use(NAME_API, userAuthorityRoutes);
 

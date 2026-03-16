@@ -7,7 +7,7 @@ const apiName='/promotion';
 
 router.route(apiName)
   .get(verifyToken, showPromotion)  // Get all Promotion
-  .post(addPromotion); // Add Promotion
+  .post(verifyToken, addPromotion); // Add Promotion
 
 router.route(`${apiName}/:id`)
   .get(verifyToken, showPromotionId)  // Get Promotion by Id

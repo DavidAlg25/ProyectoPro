@@ -7,7 +7,7 @@ const apiName='/category';
 
 router.route(apiName)
   .get(verifyToken, showCategory)  // Get all Category
-  .post(addCategory); // Add Category
+  .post(verifyToken, addCategory); // Add Category
 
 router.route(`${apiName}/:id`)
   .get(verifyToken, showCategoryId)  // Get Category by Id
