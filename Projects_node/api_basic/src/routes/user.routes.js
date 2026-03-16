@@ -8,7 +8,7 @@ const apiName = '/user';
 
 router.route(apiName)
   .get(verifyToken,showUser) // Get user
-  .post(verifyToken,addUser); // Add user
+  .post(addUser); // Add user
 
 router.route(`${apiName}/:id`)
   .get(verifyToken,showUserId)  // Get user by Id

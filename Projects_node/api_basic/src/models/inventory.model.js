@@ -1,22 +1,25 @@
 import { connect } from '../config/db/connect.js';
 
 class InventoryModel {
-  constructor(id, name, description) {
+  constructor(id, variant, stock, min_stock, max_stock, is_active) {
     this.id = id;
-    this.name = name;
-    this.description = description;
+    this.variant = variant;
+    this.stock = stock;
+    this.min_stock = min_stock;
+    this.max_stock = max_stock;
+    this.is_active = is_active;
   }
 
   async addInventory(req, res) {
     try {
-      const { name, description } = req.body;
-      if (!name || !description) {
+      const { variant, stock, min_stock, max_stock, is_active } = req.body;
+      if (!variant || !stock || !min_stock || !max_stock || !is_active) {
         return res.status(400).json({ error: "Missing required fields" });
       }
-      let sqlQuery = "INSERT INTO inventory (inventory_name,inventory_description) VALUES (?,?)";
-      const [result] = await connect.query(sqlQuery, [name, description]);
+      let sqlQuery = "INSERT INTO inventory (inventory_id,variant_FK,stock,min_stock,max_stock,is_active) VALUES (?,?.?,?,?,?)";
+      const [result] = await connect.query(sqlQuery, [variant, stock, min_stock, max_stock, is_active]);
       res.status(201).json({
-        data: [{ id: result.insertId, name, description }],
+        data: [{ id: result.insertId, variant, stock, min_stock, max_stock, is_active }],
         status: 201
       });
     } catch (error) {
@@ -26,16 +29,15 @@ class InventoryModel {
 
   async updateInventory(req, res) {
     try {
-      const { name, description } = req.body;
-      if (!name || !description) {
+      const { variant, stock, min_stock, max_stock, is_active } = req.body;
+      if (!variant || !stock || !min_stock || !max_stock || !is_active) {
         return res.status(400).json({ error: "Missing required fields" });
       }
-      let sqlQuery = "UPDATE inventory SET inventory_name=?,inventory_description=?,update_at=? WHERE role_id= ?";
-      const updateAt = new Date().toLocaleString("en-CA", { timeZone: "America/Bogota" }).replace(",", "").replace("/", "-").replace("/", "-");
-      const [result] = await connect.query(sqlQuery, [name, description, updateAt, req.params.id]);
+      let sqlQuery = "UPDATE inventory SET variant_FK=?,stock=?,min_stock=?,max_stock=?,is_active? WHERE inventory_id= ?";
+      const [result] = await connect.query(sqlQuery, [variant, stock, min_stock, max_stock, is_active, req.params.id]);
       if (result.affectedRows === 0) return res.status(404).json({ error: "Inventory not found" });
       res.status(200).json({
-        data: [{ name, description, update_at }],
+        data: [{ variant, stock, min_stock, max_stock, is_active }],
         status: 200,
         updated: result.affectedRows
       });

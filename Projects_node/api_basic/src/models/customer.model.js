@@ -1,22 +1,27 @@
 import { connect } from '../config/db/connect.js';
 
 class CustomerModel {
-  constructor(id, name, description) {
+  constructor(id, user, doc_type, document_number, first_name, second_name, first_last_name, second_last_name) {
     this.id = id;
-    this.name = name;
-    this.description = description;
+    this.user = user;
+    this.doc_type = doc_type;
+    this.document_number = document_number;
+    this.first_name = first_name;
+    this.second_name = second_name;
+    this.first_last_name = first_last_name;
+    this.second_last_name = second_last_name;
   }
 
   async addCustomer(req, res) {
     try {
-      const { name, description } = req.body;
-      if (!name || !description) {
+      const { user, doc_type, document_number, first_name, second_name, first_last_name, second_last_name} = req.body;
+      if (!user || !doc_type || !document_number || !first_name || !second_name || !first_last_name || !second_last_name) {
         return res.status(400).json({ error: "Missing required fields" });
       }
-      let sqlQuery = "INSERT INTO customer (customer_name,customer_description) VALUES (?,?)";
-      const [result] = await connect.query(sqlQuery, [name, description]);
+      let sqlQuery = "INSERT INTO customer (customer_id,user_FK,doc_type_id,document_number,first_name,second_name,first_last_name,second_last_name) VALUES (?,?,?,?,?,?,?,?)";
+      const [result] = await connect.query(sqlQuery, [user, doc_type, document_number, first_name, second_name, first_last_name, second_last_name]);
       res.status(201).json({
-        data: [{ id: result.insertId, name, description }],
+        data: [{ id: result.insertId, user, doc_type, document_number, first_name, second_name, first_last_name, second_last_name }],
         status: 201
       });
     } catch (error) {
@@ -26,16 +31,16 @@ class CustomerModel {
 
   async updateCustomer(req, res) {
     try {
-      const { name, description } = req.body;
-      if (!name || !description) {
+      const { user, doc_type, document_number, first_name, second_name, first_last_name, second_last_name } = req.body;
+      if (!user || !doc_type || !document_number || !first_name || !second_name || !first_last_name || !second_last_name) {
         return res.status(400).json({ error: "Missing required fields" });
       }
-      let sqlQuery = "UPDATE customer SET customer_name=?,customer_description=?,update_at=? WHERE role_id= ?";
-      const updateAt = new Date().toLocaleString("en-CA", { timeZone: "America/Bogota" }).replace(",", "").replace("/", "-").replace("/", "-");
-      const [result] = await connect.query(sqlQuery, [name, description, updateAt, req.params.id]);
+      let sqlQuery = "UPDATE customer SET user_FK=?,doc_type_id=?,document_number=?,first_name=?,second_name=?,first_last_name=?,second_last_name=?,updatedAt=? WHERE customer_id= ?";
+      const update_at = new Date().toLocaleString("en-CA", { timeZone: "America/Bogota" }).replace(",", "").replace("/", "-").replace("/", "-");
+      const [result] = await connect.query(sqlQuery, [user, doc_type, document_number, first_name, second_name, first_last_name, second_last_name, update_at, req.params.id]);
       if (result.affectedRows === 0) return res.status(404).json({ error: "Customer not found" });
       res.status(200).json({
-        data: [{ name, description, update_at }],
+        data: [{ user, doc_type, document_number, first_name, second_name, first_last_name, update_at }],
         status: 200,
         updated: result.affectedRows
       });
@@ -55,7 +60,7 @@ class CustomerModel {
         deleted: result.affectedRows
       });
     } catch (error) {
-      res.status(500).json({ error: "Error deleting Role", details: error.message });
+      res.status(500).json({ error: "Error deleting Customer", details: error.message });
     }
   }
 
@@ -65,7 +70,7 @@ class CustomerModel {
       const [result] = await connect.query(sqlQuery);
       res.status(200).json(result);
     } catch (error) {
-      res.status(500).json({ error: "Error fetching Customer", details: error.message });
+      res.status(500).json({ error: "Error fetching Customers", details: error.message });
     }
   }
 
