@@ -1,8 +1,24 @@
 import { connect } from '../config/db/connect.js';
 import { comparePassword } from '../library/appBcrypt.js';
 import jwt from 'jsonwebtoken';
+import AuthModel from '../models/auth.model.js';
 
 class AuthController {
+  
+  // =============================================
+  // REGISTRO PÚBLICO
+  // =============================================
+  async register(req, res) {
+    try {
+      await AuthModel.register(req, res);
+    } catch (error) {
+      res.status(500).json({ error: "Error en registro", details: error.message });
+    }
+  }
+
+  // =============================================
+  // LOGIN PÚBLICO
+  // =============================================
   async login(req, res) {
     try {
       const { login, password } = req.body;
@@ -30,7 +46,7 @@ class AuthController {
       // Verificar si el usuario está activado
       if (!user.activated) {
         return res.status(403).json({ 
-          error: "Usuario no está activado" 
+          error: "Usuario no está activado. Por favor verifica tu email." 
         });
       }
 
@@ -50,7 +66,7 @@ class AuthController {
         WHERE ua.user_FK = ?
       `, [user.user_id]);
 
-      // Crear payload del token (sin información sensible)
+      // Crear payload del token
       const payload = {
         user_id: user.user_id,
         login: user.login,
@@ -87,15 +103,48 @@ class AuthController {
     }
   }
 
+  // =============================================
+  // LOGOUT PÚBLICO
+  // =============================================
   async logout(req, res) {
-    // Como usamos JWT, el logout se maneja del lado del cliente
-    // Solo podemos enviar una respuesta exitosa
     res.json({ 
       success: true, 
       message: "Sesión cerrada exitosamente" 
     });
   }
 
+  // =============================================
+  // PERFIL - SOLO USUARIO AUTENTICADO
+  // =============================================
+  async getProfile(req, res) {
+    try {
+      await AuthModel.getProfile(req, res);
+    } catch (error) {
+      res.status(500).json({ error: "Error obteniendo perfil", details: error.message });
+    }
+  }
+
+  // =============================================
+  // ACTUALIZAR PERFIL - SOLO USUARIO AUTENTICADO
+  // =============================================
+  async updateProfile(req, res) {
+    try {
+      await AuthModel.updateProfile(req, res);
+    } catch (error) {
+      res.status(500).json({ error: "Error actualizando perfil", details: error.message });
+    }
+  }
+
+  // =============================================
+  // ACTIVAR CUENTA - PÚBLICO (con token)
+  // =============================================
+  async activateAccount(req, res) {
+    try {
+      await AuthModel.activateAccount(req, res);
+    } catch (error) {
+      res.status(500).json({ error: "Error activando cuenta", details: error.message });
+    }
+  }
 }
 
 export default new AuthController();

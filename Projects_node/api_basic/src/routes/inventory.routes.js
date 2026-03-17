@@ -1,17 +1,48 @@
 import {Router} from 'express';
-import {showInventory,showInventoryId,addInventory,updateInventory,deleteInventory} from '../controllers/inventory.controller.js';
+import {
+  getInventoryWithAlerts,
+  restockInventory,
+  showInventory,
+  showInventoryId,
+  addInventory,
+  updateInventory,
+  deleteInventory
+} from '../controllers/inventory.controller.js';
 import { verifyToken } from '../middleware/authMiddleware.js';
+import { authorize } from '../middleware/roleMiddleware.js';
 
-const router=Router();
-const apiName='/inventory';
+const router = Router();
+const apiName = '/inventory';
+
+// =============================================
+// RUTAS PARA BODEGUERO/ADMIN
+// =============================================
+
+// Ver inventario con alertas (bajo stock, exceso)
+router.get('/inventory/alerts',
+  verifyToken,
+  authorize('admin', 'bodeguero'),
+  getInventoryWithAlerts
+);
+
+// Reabastecer stock
+router.post('/inventory/restock',
+  verifyToken,
+  authorize('admin', 'bodeguero'),
+  restockInventory
+);
+
+// =============================================
+// CRUD COMPLETO (solo admin)
+// =============================================
 
 router.route(apiName)
-  .get(verifyToken, showInventory)  
-  .post(verifyToken, addInventory);
+  .get(verifyToken, authorize('admin'), showInventory)
+  .post(verifyToken, authorize('admin'), addInventory);
 
 router.route(`${apiName}/:id`)
-  .get(verifyToken, showInventoryId)
-  .put(verifyToken, updateInventory)
-  .delete(verifyToken, deleteInventory); 
+  .get(verifyToken, authorize('admin'), showInventoryId)
+  .put(verifyToken, authorize('admin'), updateInventory)
+  .delete(verifyToken, authorize('admin'), deleteInventory);
 
 export default router;

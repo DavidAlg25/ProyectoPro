@@ -1,17 +1,56 @@
 import {Router} from 'express';
-import {showShoppingCart,showShoppingCartId,addShoppingCart,updateShoppingCart,deleteShoppingCart} from '../controllers/shoppingCart.controller.js';
+import {
+  getMyCart,
+  clearCart,
+  processCart,
+  showShoppingCart,
+  showShoppingCartId,
+  addShoppingCart,
+  updateShoppingCart,
+  deleteShoppingCart
+} from '../controllers/cart.controller.js';
 import { verifyToken } from '../middleware/authMiddleware.js';
+import { authorize, isClient } from '../middleware/roleMiddleware.js';
 
-const router=Router();
-const apiName='/shoppingCart';
+const router = Router();
+const apiName = '/cart';
+
+// =============================================
+// RUTAS PARA CLIENTES (su propio carrito)
+// =============================================
+
+// Ver mi carrito
+router.get('/my-cart', 
+  verifyToken, 
+  isClient,
+  getMyCart
+);
+
+// Vaciar mi carrito
+router.delete('/my-cart/clear', 
+  verifyToken, 
+  isClient,
+  clearCart
+);
+
+// Procesar carrito (checkout)
+router.post('/my-cart/checkout', 
+  verifyToken, 
+  isClient,
+  processCart
+);
+
+// =============================================
+// RUTAS PARA ADMIN (gestión de carritos)
+// =============================================
 
 router.route(apiName)
-  .get(verifyToken, showShoppingCart)  // Get all ShoppingCart
-  .post(verifyToken, addShoppingCart); // Add ShoppingCart
+  .get(verifyToken, authorize('admin'), showShoppingCart)
+  .post(verifyToken, authorize('admin'), addShoppingCart);
 
 router.route(`${apiName}/:id`)
-  .get(verifyToken, showShoppingCartId)  // Get ShoppingCart by Id
-  .put(verifyToken, updateShoppingCart)  // Update ShoppingCart by Id
-  .delete(verifyToken, deleteShoppingCart); // Delete ShoppingCart by Id
+  .get(verifyToken, authorize('admin'), showShoppingCartId)
+  .put(verifyToken, authorize('admin'), updateShoppingCart)
+  .delete(verifyToken, authorize('admin'), deleteShoppingCart);
 
 export default router;

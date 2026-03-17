@@ -1,17 +1,42 @@
 import {Router} from 'express';
-import {showPromotion,showPromotionId,addPromotion,updatePromotion,deletePromotion} from '../controllers/promotion.controller.js';
+import {
+  getActivePromotions,
+  getPromotionsWithStats,
+  showPromotion,
+  showPromotionId,
+  addPromotion,
+  updatePromotion,
+  deletePromotion
+} from '../controllers/promotion.controller.js';
 import { verifyToken } from '../middleware/authMiddleware.js';
+import { authorize } from '../middleware/roleMiddleware.js';
 
-const router=Router();
-const apiName='/promotion';
+const router = Router();
+const apiName = '/promotion';
+
+// =============================================
+// RUTAS PÚBLICAS (catálogo)
+// =============================================
+router.get('/promotions/active', getActivePromotions);
+
+// =============================================
+// RUTAS PARA ADMIN
+// =============================================
+
+// Promociones con estadísticas
+router.get('/promotions/stats',
+  verifyToken,
+  authorize('admin'),
+  getPromotionsWithStats
+);
 
 router.route(apiName)
-  .get(verifyToken, showPromotion)  // Get all Promotion
-  .post(verifyToken, addPromotion); // Add Promotion
+  .get(verifyToken, authorize('admin'), showPromotion)
+  .post(verifyToken, authorize('admin'), addPromotion);
 
 router.route(`${apiName}/:id`)
-  .get(verifyToken, showPromotionId)  // Get Promotion by Id
-  .put(verifyToken, updatePromotion)  // Update Promotion by Id
-  .delete(verifyToken, deletePromotion); // Delete Promotion by Id
+  .get(verifyToken, authorize('admin'), showPromotionId)
+  .put(verifyToken, authorize('admin'), updatePromotion)
+  .delete(verifyToken, authorize('admin'), deletePromotion);
 
 export default router;

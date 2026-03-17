@@ -1,9 +1,24 @@
 import ProductModel from '../models/product.model.js';
 
+// =============================================
+// MÉTODOS PÚBLICOS (CUALQUIER ROL PUEDE VER)
+// =============================================
+
 export const showProduct = async (req, res) => {
   try {
     const productModel = new ProductModel();
-    productModel.showProduct(res);
+    
+    // Si es cliente, solo mostrar productos activos
+    if (req.user && req.user.roles.some(r => r.role_name === 'cliente')) {
+      req.query.onlyActive = 'true';
+    }
+    
+    // Verificar si quiere productos con variantes (para catálogo)
+    if (req.query.includeVariants === 'true') {
+      await productModel.getProductsWithVariants(req, res);
+    } else {
+      await productModel.showProduct(res);
+    }
   } catch (error) {
     res.status(500).json({ error: "Error fetching Products", details: error.message });
   }
@@ -12,37 +27,105 @@ export const showProduct = async (req, res) => {
 export const showProductId = async (req, res) => {
   try {
     const productModel = new ProductModel();
-    productModel.showProductById(res, req);
+    await productModel.showProductById(res, req);
   } catch (error) {
     res.status(500).json({ error: "Error fetching Product", details: error.message });
   }
 };
 
+// =============================================
+// MÉTODOS SOLO PARA ADMIN (CREAR)
+// =============================================
+
 export const addProduct = async (req, res) => {
   try {
+    // Verificación adicional en el controlador
+    const userRoles = req.user.roles.map(r => r.role_name);
+    if (!userRoles.includes('admin')) {
+      return res.status(403).json({ 
+        error: "Solo administradores pueden crear productos" 
+      });
+    }
+    
     const productModel = new ProductModel();
-    productModel.addProduct(req, res);
+    await productModel.addProduct(req, res);
   } catch (error) {
     res.status(500).json({ error: "Error adding Product", details: error.message });
   }
 };
 
+// =============================================
+// MÉTODOS SOLO PARA ADMIN (ACTUALIZAR)
+// =============================================
+
 export const updateProduct = async (req, res) => {
   try {
+    const userRoles = req.user.roles.map(r => r.role_name);
+    if (!userRoles.includes('admin')) {
+      return res.status(403).json({ 
+        error: "Solo administradores pueden actualizar productos" 
+      });
+    }
+    
     const productModel = new ProductModel();
-    productModel.updateProduct(req, res);
+    await productModel.updateProduct(req, res);
   } catch (error) {
     res.status(500).json({ error: "Error updating Product", details: error.message });
   }
 };
 
+// =============================================
+// MÉTODOS SOLO PARA ADMIN (ELIMINAR)
+// =============================================
+
 export const deleteProduct = async (req, res) => {
   try {
+    const userRoles = req.user.roles.map(r => r.role_name);
+    if (!userRoles.includes('admin')) {
+      return res.status(403).json({ 
+        error: "Solo administradores pueden eliminar productos" 
+      });
+    }
+    
     const productModel = new ProductModel();
-    productModel.deleteProduct(req, res);
+    await productModel.deleteProduct(req, res);
   } catch (error) {
     res.status(500).json({ error: "Error deleting Product", details: error.message });
   }
 };
 
+// =============================================
+// MÉTODO ESPECÍFICO: Cambiar estado
+// =============================================
 
+export const toggleProductStatus = async (req, res) => {
+  try {
+    const userRoles = req.user.roles.map(r => r.role_name);
+    if (!userRoles.includes('admin')) {
+      return res.status(403).json({ 
+        error: "Solo administradores pueden cambiar el estado del producto" 
+      });
+    }
+    
+    const productModel = new ProductModel();
+    await productModel.toggleStatus(req, res);
+  } catch (error) {
+    res.status(500).json({ error: "Error toggling product status", details: error.message });
+  }
+};
+
+// =============================================
+// MÉTODO PÚBLICO: Catálogo para clientes
+// =============================================
+
+export const getCatalog = async (req, res) => {
+  try {
+    const productModel = new ProductModel();
+    // Forzar solo productos activos para el catálogo público
+    req.query.onlyActive = 'true';
+    req.query.includeVariants = 'true';
+    await productModel.getProductsWithVariants(req, res);
+  } catch (error) {
+    res.status(500).json({ error: "Error fetching catalog", details: error.message });
+  }
+};

@@ -1,17 +1,42 @@
 import {Router} from 'express';
-import {showProductPromotion,showProductPromotionId,addProductPromotion,updateProductPromotion,deleteProductPromotion} from '../controllers/productPromotion.controller.js';
+import {
+  bulkAssignPromotions,
+  getVariantPromotions,
+  showProductPromotion,
+  showProductPromotionId,
+  addProductPromotion,
+  updateProductPromotion,
+  deleteProductPromotion
+} from '../controllers/promotion.controller.js';
 import { verifyToken } from '../middleware/authMiddleware.js';
+import { authorize } from '../middleware/roleMiddleware.js';
 
-const router=Router();
-const apiName='/productPromotion';
+const router = Router();
+const apiName = '/product-promotion';
+
+// =============================================
+// RUTAS PÚBLICAS (catálogo)
+// =============================================
+router.get('/variant/:variantId/promotions', getVariantPromotions);
+
+// =============================================
+// RUTAS PARA ADMIN
+// =============================================
+
+// Asignación masiva
+router.post('/promotions/bulk-assign',
+  verifyToken,
+  authorize('admin'),
+  bulkAssignPromotions
+);
 
 router.route(apiName)
-  .get(verifyToken, showProductPromotion)  // Get all ProductPromotion
-  .post(verifyToken, addProductPromotion); // Add ProductPromotion
+  .get(verifyToken, authorize('admin'), showProductPromotion)
+  .post(verifyToken, authorize('admin'), addProductPromotion);
 
 router.route(`${apiName}/:id`)
-  .get(verifyToken, showProductPromotionId)  // Get ProductPromotion by Id
-  .put(verifyToken, updateProductPromotion)  // Update ProductPromotion by Id
-  .delete(verifyToken, deleteProductPromotion); // Delete ProductPromotion by Id
+  .get(verifyToken, authorize('admin'), showProductPromotionId)
+  .put(verifyToken, authorize('admin'), updateProductPromotion)
+  .delete(verifyToken, authorize('admin'), deleteProductPromotion);
 
 export default router;

@@ -1,17 +1,28 @@
 import {Router} from 'express';
-import {showPurchaseDetail,showPurchaseDetailId,addPurchaseDetail,updatePurchaseDetail,deletePurchaseDetail} from '../controllers/purchaseDetail.controller.js';
+import {
+  showPurchaseDetail,
+  showPurchaseDetailId,
+  addPurchaseDetail,
+  updatePurchaseDetail,
+  deletePurchaseDetail
+} from '../controllers/purchase.controller.js';
 import { verifyToken } from '../middleware/authMiddleware.js';
+import { authorize } from '../middleware/roleMiddleware.js';
 
-const router=Router();
-const apiName='/purchaseDetail';
+const router = Router();
+const apiName = '/purchase-detail';
+
+// =============================================
+// RUTAS SOLO PARA ADMIN
+// =============================================
 
 router.route(apiName)
-  .get(verifyToken, showPurchaseDetail)  // Get all PurchaseDetail
-  .post(verifyToken, addPurchaseDetail); // Add PurchaseDetail
+  .get(verifyToken, authorize('admin'), showPurchaseDetail)
+  .post(verifyToken, authorize('admin'), addPurchaseDetail);
 
 router.route(`${apiName}/:id`)
-  .get(verifyToken, showPurchaseDetailId)  // Get PurchaseDetail by Id
-  .put(verifyToken, updatePurchaseDetail)  // Update PurchaseDetail by Id
-  .delete(verifyToken, deletePurchaseDetail); // Delete PurchaseDetail by Id
+  .get(verifyToken, authorize('admin'), showPurchaseDetailId)
+  .put(verifyToken, authorize('admin'), updatePurchaseDetail)
+  .delete(verifyToken, authorize('admin'), deletePurchaseDetail);
 
 export default router;

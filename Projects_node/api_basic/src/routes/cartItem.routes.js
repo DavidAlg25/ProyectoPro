@@ -1,17 +1,50 @@
 import {Router} from 'express';
-import {showCartItem,showCartItemId,addCartItem,updateCartItem,deleteCartItem} from '../controllers/cartItem.controller.js';
+import {
+  addToCart,
+  updateCartItemQuantity,
+  removeFromCart,
+  showCartItem,
+  showCartItemId
+} from '../controllers/cart.controller.js';
 import { verifyToken } from '../middleware/authMiddleware.js';
+import { authorize, isClient } from '../middleware/roleMiddleware.js';
 
-const router=Router();
-const apiName='/cartItem';
+const router = Router();
+const apiName = '/cart/items';
+
+// =============================================
+// RUTAS PARA CLIENTES (sus items)
+// =============================================
+
+// Agregar item al carrito
+router.post('/cart/add', 
+  verifyToken, 
+  isClient,
+  addToCart
+);
+
+// Actualizar cantidad de un item
+router.put('/cart/item/:id', 
+  verifyToken, 
+  isClient,
+  updateCartItemQuantity
+);
+
+// Eliminar item del carrito
+router.delete('/cart/item/:id', 
+  verifyToken, 
+  isClient,
+  removeFromCart
+);
+
+// =============================================
+// RUTAS PARA ADMIN (gestión de items)
+// =============================================
 
 router.route(apiName)
-  .get(verifyToken, showCartItem)  // Get all CartItem
-  .post(verifyToken, addCartItem); // Add CartItem
+  .get(verifyToken, authorize('admin'), showCartItem);
 
 router.route(`${apiName}/:id`)
-  .get(verifyToken, showCartItemId)  // Get CartItem by Id
-  .put(verifyToken, updateCartItem)  // Update CartItem by Id
-  .delete(verifyToken, deleteCartItem); // Delete CartItem by Id
+  .get(verifyToken, authorize('admin'), showCartItemId);
 
 export default router;

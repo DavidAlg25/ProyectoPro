@@ -1,17 +1,28 @@
 import {Router} from 'express';
-import {showOrderDetail,showOrderDetailId,addOrderDetail,updateOrderDetail,deleteOrderDetail} from '../controllers/orderDetail.controller.js';
+import {
+  showOrderDetail,
+  showOrderDetailId,
+  addOrderDetail,
+  updateOrderDetail,
+  deleteOrderDetail
+} from '../controllers/order.controller.js';
 import { verifyToken } from '../middleware/authMiddleware.js';
+import { authorize } from '../middleware/roleMiddleware.js';
 
-const router=Router();
-const apiName='/orderDetail';
+const router = Router();
+const apiName = '/order-detail';
+
+// =============================================
+// RUTAS SOLO PARA ADMIN
+// =============================================
 
 router.route(apiName)
-  .get(verifyToken, showOrderDetail)  // Get all OrderDetail
-  .post(verifyToken, addOrderDetail); // Add OrderDetail
+  .get(verifyToken, authorize('admin'), showOrderDetail)
+  .post(verifyToken, authorize('admin'), addOrderDetail);
 
 router.route(`${apiName}/:id`)
-  .get(verifyToken, showOrderDetailId)  // Get OrderDetail by Id
-  .put(verifyToken, updateOrderDetail)  // Update OrderDetail by Id
-  .delete(verifyToken, deleteOrderDetail); // Delete OrderDetail by Id
+  .get(verifyToken, authorize('admin'), showOrderDetailId)
+  .put(verifyToken, authorize('admin'), updateOrderDetail)
+  .delete(verifyToken, authorize('admin'), deleteOrderDetail);
 
 export default router;

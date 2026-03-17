@@ -1,17 +1,64 @@
 import {Router} from 'express';
-import {showInvoice,showInvoiceId,addInvoice,updateInvoice,deleteInvoice} from '../controllers/invoice.controller.js';
+import {
+  generateInvoiceFromOrder,
+  getMyInvoices,
+  getInvoiceDetails,
+  cancelInvoice,
+  showInvoice,
+  showInvoiceId,
+  addInvoice,
+  updateInvoice,
+  deleteInvoice
+} from '../controllers/invoice.controller.js';
 import { verifyToken } from '../middleware/authMiddleware.js';
+import { authorize, isClient } from '../middleware/roleMiddleware.js';
 
-const router=Router();
-const apiName='/invoice';
+const router = Router();
+const apiName = '/invoice';
+
+// =============================================
+// RUTAS PARA CLIENTES
+// =============================================
+
+// Generar factura desde orden pagada
+router.post('/invoice/generate',
+  verifyToken,
+  isClient,
+  generateInvoiceFromOrder
+);
+
+// Ver mis facturas
+router.get('/my-invoices',
+  verifyToken,
+  isClient,
+  getMyInvoices
+);
+
+// Ver detalle de una factura específica
+router.get('/my-invoices/:id',
+  verifyToken,
+  isClient,
+  getInvoiceDetails
+);
+
+// =============================================
+// RUTAS PARA ADMIN (gestión de facturas)
+// =============================================
 
 router.route(apiName)
-  .get(verifyToken, showInvoice)  // Get all Invoice
-  .post(verifyToken, addInvoice); // Add Invoice
+  .get(verifyToken, authorize('admin'), showInvoice)
+  .post(verifyToken, authorize('admin'), addInvoice);
 
 router.route(`${apiName}/:id`)
-  .get(verifyToken, showInvoiceId)  // Get Invoice by Id
-  .put(verifyToken, updateInvoice)  // Update Invoice by Id
-  .delete(verifyToken, deleteInvoice); // Delete Invoice by Id
+  .get(verifyToken, authorize('admin'), showInvoiceId)
+  .put(verifyToken, authorize('admin'), updateInvoice)
+  .delete(verifyToken, authorize('admin'), deleteInvoice);
+
+// Anular factura (solo admin)
+router.put('/invoice/:id/cancel',
+  verifyToken,
+  authorize('admin'),
+  cancelInvoice
+);
 
 export default router;

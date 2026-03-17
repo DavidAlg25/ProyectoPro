@@ -1,17 +1,36 @@
 import {Router} from 'express';
-import {showSupplier,showSupplierId,addSupplier,updateSupplier,deleteSupplier} from '../controllers/supplier.controller.js';
+import {
+  getSuppliersWithStats,
+  showSupplier,
+  showSupplierId,
+  addSupplier,
+  updateSupplier,
+  deleteSupplier
+} from '../controllers/purchase.controller.js';
 import { verifyToken } from '../middleware/authMiddleware.js';
+import { authorize } from '../middleware/roleMiddleware.js';
 
-const router=Router();
-const apiName='/supplier';
+const router = Router();
+const apiName = '/supplier';
+
+// =============================================
+// RUTAS PARA ADMIN (gestión de proveedores)
+// =============================================
+
+// Proveedores con estadísticas
+router.get('/suppliers/stats',
+  verifyToken,
+  authorize('admin'),
+  getSuppliersWithStats
+);
 
 router.route(apiName)
-  .get(verifyToken, showSupplier)  // Get all Supplier
-  .post(verifyToken, addSupplier); // Add Supplier
+  .get(verifyToken, authorize('admin'), showSupplier)
+  .post(verifyToken, authorize('admin'), addSupplier);
 
 router.route(`${apiName}/:id`)
-  .get(verifyToken, showSupplierId)  // Get Supplier by Id
-  .put(verifyToken, updateSupplier)  // Update Supplier by Id
-  .delete(verifyToken, deleteSupplier); // Delete Supplier by Id
+  .get(verifyToken, authorize('admin'), showSupplierId)
+  .put(verifyToken, authorize('admin'), updateSupplier)
+  .delete(verifyToken, authorize('admin'), deleteSupplier);
 
 export default router;
