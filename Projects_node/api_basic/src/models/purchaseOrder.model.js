@@ -281,145 +281,82 @@ class PurchaseOrderModel {
   // MÉTODOS CRUD BASE 
   // =============================================
 
-  async addPurchaseOrder(req, res) {
-    let connection;
-    try {
-      const { status, totalAmount, paymentMethod, supplier, user } = req.body;
-
-      if (!status || !totalAmount || !paymentMethod || !supplier || !user) {
-        return res.status(400).json({ error: "Missing required fields" });
-      }
-
-      // VALIDACIÓN: Proveedor existe
-      const supplierCheck = await this.validateSupplierActive(supplier);
-      if (!supplierCheck.exists) {
-        return res.status(400).json({ error: "El proveedor no existe" });
-      }
-
-      // VALIDACIÓN: Usuario existe
-      const userExists = await this.validateUserExists(user);
-      if (!userExists) {
-        return res.status(400).json({ error: "El usuario no existe" });
-      }
-
-      connection = await connect.getConnection();
-      await connection.beginTransaction();
-
-      const [result] = await connection.query(
-        `INSERT INTO purchaseorder 
-         (purchaseOrder_status, purchaseOrder_totalAmount, purchaseOrder_paymentMethod, supplier_FK, user_FK, created_by) 
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [status, totalAmount, paymentMethod, supplier, user, req.user?.login || 'system']
-      );
-
-      await connection.commit();
-
-      res.status(201).json({
-        success: true,
-        data: [{ id: result.insertId, status, totalAmount, paymentMethod, supplier, user }],
-        message: "Orden de compra creada exitosamente"
-      });
-
-    } catch (error) {
-      if (connection) await connection.rollback();
-      res.status(500).json({ error: "Error adding PurchaseOrder", details: error.message });
-    } finally {
-      if (connection) connection.release();
-    }
-  }
-
   async updatePurchaseOrder(req, res) {
     let connection;
     try {
-      const { status, totalAmount, paymentMethod, supplier, user } = req.body;
       const orderId = req.params.id;
+      const { supplierId, paymentMethod } = req.body; // solo estos campos
 
-      if (!status || !totalAmount || !paymentMethod || !supplier || !user) {
-        return res.status(400).json({ error: "Missing required fields" });
+      if (!supplierId && !paymentMethod) {
+        return res.status(400).json({ error: "Debe proporcionar al menos supplierId o paymentMethod" });
       }
 
       connection = await connect.getConnection();
       await connection.beginTransaction();
 
-      const update_at = new Date().toLocaleString("en-CA", { timeZone: "America/Bogota" }).replace(",", "").replace("/", "-").replace("/", "-");
-
-      const [result] = await connection.query(
-        `UPDATE purchaseorder 
-         SET purchaseOrder_status=?, purchaseOrder_totalAmount=?, purchaseOrder_paymentMethod=?, supplier_FK=?, user_FK=?, updatedAt=?, last_modified_by=?
-         WHERE purchaseOrder_id=?`,
-        [status, totalAmount, paymentMethod, supplier, user, update_at, req.user?.login || 'system', orderId]
+      // Verificar que la orden existe y está pendiente
+      const [order] = await connection.query(
+        'SELECT purchaseOrder_status FROM purchaseorder WHERE purchaseOrder_id = ?',
+        [orderId]
       );
-
-      if (result.affectedRows === 0) {
+      if (order.length === 0) {
         await connection.rollback();
-        return res.status(404).json({ error: "PurchaseOrder not found" });
+        return res.status(404).json({ error: "Orden de compra no encontrada" });
       }
+      if (order[0].purchaseOrder_status !== 'Pendiente') {
+        await connection.rollback();
+        return res.status(400).json({ 
+          error: "Solo se pueden modificar órdenes en estado Pendiente",
+          current_status: order[0].purchaseOrder_status
+        });
+      }
+
+      // Validar proveedor si se envía
+      if (supplierId) {
+        const supplierCheck = await this.validateSupplierActive(supplierId);
+        if (!supplierCheck.exists) {
+          await connection.rollback();
+          return res.status(400).json({ error: "El proveedor no existe" });
+        }
+        if (!supplierCheck.isActive) {
+          await connection.rollback();
+          return res.status(400).json({ error: "El proveedor está inactivo" });
+        }
+      }
+
+      // Construir consulta de actualización dinámica
+      const updates = [];
+      const params = [];
+      if (supplierId) {
+        updates.push("supplier_FK = ?");
+        params.push(supplierId);
+      }
+      if (paymentMethod) {
+        updates.push("purchaseOrder_paymentMethod = ?");
+        params.push(paymentMethod);
+      }
+
+      if (updates.length === 0) {
+        await connection.rollback();
+        return res.status(400).json({ error: "No hay campos válidos para actualizar" });
+      }
+
+      const update_at = new Date().toLocaleString("en-CA", { timeZone: "America/Bogota", hour12: false }).replace(",", "").replace("/", "-").replace("/", "-");
+      params.push(update_at, req.user?.login || 'system', orderId);
+
+      const sql = `UPDATE purchaseorder SET ${updates.join(", ")}, updatedAt = ?, last_modified_by = ? WHERE purchaseOrder_id = ?`;
+      const [result] = await connection.query(sql, params);
 
       await connection.commit();
 
       res.status(200).json({
         success: true,
-        data: [{ status, totalAmount, paymentMethod, supplier, user, update_at }],
         message: "Orden de compra actualizada exitosamente"
       });
 
     } catch (error) {
       if (connection) await connection.rollback();
       res.status(500).json({ error: "Error updating PurchaseOrder", details: error.message });
-    } finally {
-      if (connection) connection.release();
-    }
-  }
-
-  async deletePurchaseOrder(req, res) {
-    let connection;
-    try {
-      const orderId = req.params.id;
-
-      connection = await connect.getConnection();
-      await connection.beginTransaction();
-
-      // Verificar si tiene detalles
-      const [details] = await connection.query(
-        'SELECT purchaseDetail_id FROM purchasedetail WHERE purchaseOrder_FK = ? LIMIT 1',
-        [orderId]
-      );
-
-      if (details.length > 0) {
-        // Soft delete: solo cambiar estado
-        await connection.query(
-          'UPDATE purchaseorder SET purchaseOrder_status = "Eliminado" WHERE purchaseOrder_id = ?',
-          [orderId]
-        );
-
-        await connection.commit();
-
-        return res.status(200).json({
-          success: true,
-          message: "Orden de compra desactivada (tenía detalles asociados)",
-          softDelete: true
-        });
-      }
-
-      // Si no tiene detalles, eliminar físicamente
-      const [result] = await connection.query('DELETE FROM purchaseorder WHERE purchaseOrder_id = ?', [orderId]);
-
-      if (result.affectedRows === 0) {
-        await connection.rollback();
-        return res.status(404).json({ error: "PurchaseOrder not found" });
-      }
-
-      await connection.commit();
-
-      res.status(200).json({
-        success: true,
-        message: "Orden de compra eliminada exitosamente",
-        deleted: result.affectedRows
-      });
-
-    } catch (error) {
-      if (connection) await connection.rollback();
-      res.status(500).json({ error: "Error deleting PurchaseOrder", details: error.message });
     } finally {
       if (connection) connection.release();
     }
@@ -437,7 +374,7 @@ class PurchaseOrderModel {
         LEFT JOIN user u ON po.user_FK = u.user_id
         LEFT JOIN purchasedetail pd ON po.purchaseOrder_id = pd.purchaseOrder_FK
         GROUP BY po.purchaseOrder_id
-        ORDER BY po.created_at DESC
+        ORDER BY po.createdAt DESC
       `);
       res.status(200).json({
         success: true,
@@ -450,36 +387,49 @@ class PurchaseOrderModel {
 
   async showPurchaseOrderById(res, req) {
     try {
-      const [result] = await connect.query(
-        `SELECT po.*,
-                JSON_ARRAYAGG(
-                  JSON_OBJECT(
-                    'detail_id', pd.purchaseDetail_id,
-                    'variant_id', pd.variant_FK,
-                    'quantity', pd.purchaseDetail_quantity,
-                    'unit_price', pd.purchaseDetail_unitPrice,
-                    'subtotal', pd.purchaseDetail_subTotal,
-                    'product_name', p.product_name,
-                    'size', v.size
-                  )
-                ) as details
-         FROM purchaseorder po
-         JOIN supplier s ON po.supplier_FK = s.supplier_id
-         LEFT JOIN purchasedetail pd ON po.purchaseOrder_id = pd.purchaseOrder_FK
-         LEFT JOIN productvariants v ON pd.variant_FK = v.variant_id
-         LEFT JOIN products p ON v.product_FK = p.product_id
-         WHERE po.purchaseOrder_id = ?
-         GROUP BY po.purchaseOrder_id`,
-        [req.params.id]
+      const orderId = req.params.id;
+
+      // 1. Obtener información de la orden de compra
+      const [purchaseOrder] = await connect.query(
+        `SELECT po.*, s.supplier_name
+        FROM purchaseorder po
+        JOIN supplier s ON po.supplier_FK = s.supplier_id
+        WHERE po.purchaseOrder_id = ?`,
+        [orderId]
       );
 
-      if (result.length === 0) return res.status(404).json({ error: "PurchaseOrder not found" });
+      if (purchaseOrder.length === 0) {
+        return res.status(404).json({ error: "PurchaseOrder not found" });
+      }
 
+      // 2. Obtener los detalles de la orden
+      const [details] = await connect.query(
+        `SELECT 
+          pd.purchaseDetail_id as detail_id,
+          pd.variant_FK as variant_id,
+          pd.purchaseDetail_quantity as quantity,
+          pd.purchaseDetail_unitPrice as unit_price,
+          pd.purchaseDetail_subTotal as subtotal,
+          p.product_name,
+          v.size
+        FROM purchasedetail pd
+        LEFT JOIN productvariants v ON pd.variant_FK = v.variant_id
+        LEFT JOIN products p ON v.product_FK = p.product_id
+        WHERE pd.purchaseOrder_FK = ?`,
+        [orderId]
+      );
+
+      // 3. Construir la respuesta
       res.status(200).json({
         success: true,
-        data: result[0]
+        data: {
+          ...purchaseOrder[0],
+          details: details || []
+        }
       });
+
     } catch (error) {
+      console.error('Error en showPurchaseOrderById:', error);
       res.status(500).json({ error: "Error fetching PurchaseOrder", details: error.message });
     }
   }

@@ -2,10 +2,7 @@ import {Router} from 'express';
 import {
   getMovementsWithFilters,
   showInventoryMovement,
-  showInventoryMovementId,
-  addInventoryMovement,
-  updateInventoryMovement,
-  deleteInventoryMovement
+  showInventoryMovementId
 } from '../controllers/inventory.controller.js';
 import { verifyToken } from '../middleware/authMiddleware.js';
 import { authorize } from '../middleware/roleMiddleware.js';
@@ -29,12 +26,9 @@ router.get('/movements/filter',
 // =============================================
 
 router.route(apiName)
-  .get(verifyToken, authorize('admin'), showInventoryMovement)
-  .post(verifyToken, authorize('admin'), addInventoryMovement);
+  .get(verifyToken, authorize('admin'), showInventoryMovement);
 
 router.route(`${apiName}/:id`)
-  .get(verifyToken, authorize('admin'), showInventoryMovementId)
-  .put(verifyToken, authorize('admin'), updateInventoryMovement)
-  .delete(verifyToken, authorize('admin'), deleteInventoryMovement);
+  .get(verifyToken, authorize('admin'), showInventoryMovementId);
 
 export default router;

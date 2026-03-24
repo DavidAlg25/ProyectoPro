@@ -37,6 +37,6 @@ router.route(apiName)
 router.route(`${apiName}/:id`)
   .get(verifyToken, authorize('admin'), showProductPromotionId)
   .put(verifyToken, authorize('admin'), updateProductPromotion)
-  .delete(verifyToken, authorize('admin'), deleteProductPromotion);
+  .delete(verifyToken, authorize('admin'), deleteProductPromotion); 
 
 export default router;

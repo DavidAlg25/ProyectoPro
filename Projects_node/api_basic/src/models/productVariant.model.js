@@ -163,7 +163,7 @@ class ProductVariantModel {
       connection = await connect.getConnection();
       await connection.beginTransaction();
 
-      const updated_at = new Date().toLocaleString("en-CA", { timeZone: "America/Bogota" }).replace(",", "").replace("/", "-").replace("/", "-");
+      const updated_at = new Date().toLocaleString("en-CA", { timeZone: "America/Bogota", hour12: false }).replace(",", "").replace("/", "-").replace("/", "-");
 
       let sqlQuery = `UPDATE productvariants 
                       SET product_FK=?, size=?, unit_price=?, status=?, updatedAt=? 

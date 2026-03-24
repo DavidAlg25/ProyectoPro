@@ -14,7 +14,7 @@ class DashboardController {
           COALESCE(SUM(order_total_amount), 0) as total_sales,
           COALESCE(AVG(order_total_amount), 0) as average_ticket
         FROM \`order\`
-        WHERE DATE(created_at) = CURDATE()
+        WHERE DATE(createdAt) = CURDATE()
           AND order_status != 'Cancelada'
       `);
 
@@ -24,8 +24,8 @@ class DashboardController {
           COUNT(*) as total_orders,
           COALESCE(SUM(order_total_amount), 0) as total_sales
         FROM \`order\`
-        WHERE MONTH(created_at) = MONTH(CURDATE())
-          AND YEAR(created_at) = YEAR(CURDATE())
+        WHERE MONTH(createdAt) = MONTH(CURDATE())
+          AND YEAR(createdAt) = YEAR(CURDATE())
           AND order_status != 'Cancelada'
       `);
 
@@ -41,7 +41,7 @@ class DashboardController {
         JOIN products p ON v.product_FK = p.product_id
         JOIN \`order\` o ON od.order_id = o.order_id
         WHERE o.order_status = 'Pagado'
-          AND o.created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+          AND o.createdAt >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
         GROUP BY v.variant_id
         ORDER BY total_sold DESC
         LIMIT 10
@@ -52,22 +52,17 @@ class DashboardController {
         SELECT 
           COUNT(*) as total_new_customers
         FROM customer
-        WHERE DATE(created_at) = CURDATE()
+        WHERE DATE(createdAt) = CURDATE()
       `);
 
-      // 5. Stock bajo (alertas)
-      const [lowStock] = await connect.query(`
+      // 5. Stock bajo (alertas) - SIN JSON_ARRAYAGG
+      const [lowStockProducts] = await connect.query(`
         SELECT 
-          COUNT(*) as total_low_stock,
-          JSON_ARRAYAGG(
-            JSON_OBJECT(
-              'product', p.product_name,
-              'size', v.size,
-              'stock', i.stock,
-              'min_stock', i.min_stock,
-              'variant_id', v.variant_id
-            )
-          ) as products
+          p.product_name as product,
+          v.size,
+          i.stock,
+          i.min_stock,
+          v.variant_id
         FROM inventory i
         JOIN productvariants v ON i.variant_FK = v.variant_id
         JOIN products p ON v.product_FK = p.product_id
@@ -87,38 +82,38 @@ class DashboardController {
       // 7. Actividad reciente
       const [recentActivity] = await connect.query(`
         (SELECT 
-           'orden' as type,
-           order_id as id,
-           order_status as status,
-           order_total_amount as amount,
-           created_at,
-           created_by
-         FROM \`order\`
-         ORDER BY created_at DESC
-         LIMIT 5)
+          'orden' as type,
+          order_id as id,
+          order_status as status,
+          order_total_amount as amount,
+          createdAt,
+          created_by
+        FROM \`order\`
+        ORDER BY createdAt DESC
+        LIMIT 5)
         UNION ALL
         (SELECT 
-           'pago' as type,
-           payment_id as id,
-           payment_status as status,
-           payment_amount as amount,
-           created_at,
-           created_by
-         FROM payment
-         ORDER BY created_at DESC
-         LIMIT 5)
+          'pago' as type,
+          payment_id as id,
+          payment_status as status,
+          payment_amount as amount,
+          createdAt,
+          created_by
+        FROM payment
+        ORDER BY createdAt DESC
+        LIMIT 5)
         UNION ALL
         (SELECT 
-           'usuario' as type,
-           user_id as id,
-           CASE WHEN activated THEN 'activado' ELSE 'registrado' END as status,
-           NULL as amount,
-           created_at,
-           created_by
-         FROM user
-         ORDER BY created_at DESC
-         LIMIT 5)
-        ORDER BY created_at DESC
+          'usuario' as type,
+          user_id as id,
+          CASE WHEN activated THEN 'activado' ELSE 'registrado' END as status,
+          NULL as amount,
+          createdAt,
+          created_by
+        FROM user
+        ORDER BY createdAt DESC
+        LIMIT 5)
+        ORDER BY createdAt DESC
         LIMIT 10
       `);
 
@@ -130,6 +125,12 @@ class DashboardController {
           (SELECT COUNT(*) FROM products WHERE status = 'Activo') as total_products,
           (SELECT COUNT(*) FROM \`order\` WHERE order_status = 'Pagado') as total_completed_orders
       `);
+
+      // Construir objeto low_stock como antes (manteniendo estructura)
+      const lowStock = {
+        total_low_stock: lowStockProducts.length,
+        products: lowStockProducts
+      };
 
       res.json({
         success: true,
@@ -145,10 +146,7 @@ class DashboardController {
             sales: salesMonth[0].total_sales
           },
           new_customers: newCustomers[0].total_new_customers,
-          low_stock: {
-            total: lowStock[0].total_low_stock,
-            products: lowStock[0].products || []
-          },
+          low_stock: lowStock,
           orders_by_status: ordersByStatus,
           top_products: topProducts,
           recent_activity: recentActivity
@@ -176,14 +174,14 @@ class DashboardController {
       let selectClause;
       
       if (groupBy === 'day') {
-        groupClause = 'DATE(created_at)';
-        selectClause = 'DATE(created_at) as period';
+        groupClause = 'DATE(createdAt)';
+        selectClause = 'DATE(createdAt) as period';
       } else if (groupBy === 'month') {
-        groupClause = 'DATE_FORMAT(created_at, "%Y-%m")';
-        selectClause = 'DATE_FORMAT(created_at, "%Y-%m") as period';
+        groupClause = 'DATE_FORMAT(createdAt, "%Y-%m")';
+        selectClause = 'DATE_FORMAT(createdAt, "%Y-%m") as period';
       } else if (groupBy === 'year') {
-        groupClause = 'YEAR(created_at)';
-        selectClause = 'YEAR(created_at) as period';
+        groupClause = 'YEAR(createdAt)';
+        selectClause = 'YEAR(createdAt) as period';
       }
 
       const [report] = await connect.query(`
@@ -194,7 +192,7 @@ class DashboardController {
           COALESCE(AVG(order_total_amount), 0) as average_ticket,
           COUNT(DISTINCT customer_FK) as unique_customers
         FROM \`order\`
-        WHERE DATE(created_at) BETWEEN ? AND ?
+        WHERE DATE(createdAt) BETWEEN ? AND ?
           AND order_status = 'Pagado'
         GROUP BY period
         ORDER BY period DESC
@@ -208,7 +206,7 @@ class DashboardController {
           SUM(payment_amount) as amount
         FROM payment p
         JOIN \`order\` o ON p.order_FK = o.order_id
-        WHERE DATE(o.created_at) BETWEEN ? AND ?
+        WHERE DATE(o.createdAt) BETWEEN ? AND ?
         GROUP BY payment_method
       `, [start, end]);
 
@@ -220,7 +218,7 @@ class DashboardController {
           COALESCE(AVG(order_total_amount), 0) as average_ticket,
           COUNT(DISTINCT customer_FK) as unique_customers
         FROM \`order\`
-        WHERE DATE(created_at) BETWEEN ? AND ?
+        WHERE DATE(createdAt) BETWEEN ? AND ?
           AND order_status = 'Pagado'
       `, [start, end]);
 
@@ -275,12 +273,12 @@ class DashboardController {
            FROM inventorymovement 
            WHERE variant_FK = v.variant_id 
              AND movement_type = 'Salida'
-             AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)) as monthly_sales,
+             AND createdAt >= DATE_SUB(NOW(), INTERVAL 30 DAY)) as monthly_sales,
           (SELECT COALESCE(SUM(quantity), 0)
            FROM inventorymovement 
            WHERE variant_FK = v.variant_id 
              AND movement_type = 'Entrada'
-             AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)) as monthly_purchases
+             AND createdAt >= DATE_SUB(NOW(), INTERVAL 30 DAY)) as monthly_purchases
         FROM inventory i
         JOIN productvariants v ON i.variant_FK = v.variant_id
         JOIN products p ON v.product_FK = p.product_id
@@ -329,13 +327,13 @@ class DashboardController {
           c.second_last_name,
           u.email,
           u.activated,
-          u.created_at as registration_date,
+          u.createdAt as registration_date,
           COUNT(DISTINCT o.order_id) as total_orders,
           COALESCE(SUM(o.order_total_amount), 0) as total_spent,
-          MAX(o.created_at) as last_purchase,
+          MAX(o.createdAt) as last_purchase,
           CASE 
-            WHEN MAX(o.created_at) >= DATE_SUB(NOW(), INTERVAL 30 DAY) THEN 'Activo'
-            WHEN MAX(o.created_at) >= DATE_SUB(NOW(), INTERVAL 90 DAY) THEN 'Inactivo'
+            WHEN MAX(o.createdAt) >= DATE_SUB(NOW(), INTERVAL 30 DAY) THEN 'Activo'
+            WHEN MAX(o.createdAt) >= DATE_SUB(NOW(), INTERVAL 90 DAY) THEN 'Inactivo'
             ELSE 'Perdido'
           END as status
         FROM customer c
@@ -383,9 +381,9 @@ class DashboardController {
           s.supplier_status,
           COUNT(DISTINCT po.purchaseOrder_id) as total_orders,
           COALESCE(SUM(po.purchaseOrder_totalAmount), 0) as total_purchases,
-          MAX(po.created_at) as last_purchase,
+          MAX(po.createdAt) as last_purchase,
           AVG(po.purchaseOrder_totalAmount) as average_order,
-          MIN(po.created_at) as first_purchase
+          MIN(po.createdAt) as first_purchase
         FROM supplier s
         LEFT JOIN purchaseorder po ON s.supplier_id = po.supplier_FK AND po.purchaseOrder_status = 'Recibida'
         GROUP BY s.supplier_id
@@ -444,6 +442,8 @@ class DashboardController {
         ORDER BY total_sold DESC
       `);
 
+      
+
       const summary = {
         total_products: report.length,
         active: report.filter(p => p.status === 'Activo').length,
@@ -484,13 +484,13 @@ class DashboardController {
             quantity as value,
             movement_description as description,
             user_FK,
-            created_at,
+            createdAt,
             variant_FK
           FROM inventorymovement
           WHERE 1=1
           ${userId ? 'AND user_FK = ?' : ''}
-          ${startDate ? 'AND DATE(created_at) >= ?' : ''}
-          ${endDate ? 'AND DATE(created_at) <= ?' : ''}
+          ${startDate ? 'AND DATE(createdAt) >= ?' : ''}
+          ${endDate ? 'AND DATE(createdAt) <= ?' : ''}
         `);
         if (userId) allParams.push(userId);
         if (startDate) allParams.push(startDate);
@@ -507,13 +507,13 @@ class DashboardController {
             order_total_amount as value,
             CONCAT('Orden #', order_id) as description,
             created_by as user_FK,
-            created_at,
+            createdAt,
             NULL as variant_FK
           FROM \`order\`
           WHERE 1=1
           ${userId ? 'AND created_by = ?' : ''}
-          ${startDate ? 'AND DATE(created_at) >= ?' : ''}
-          ${endDate ? 'AND DATE(created_at) <= ?' : ''}
+          ${startDate ? 'AND DATE(createdAt) >= ?' : ''}
+          ${endDate ? 'AND DATE(createdAt) <= ?' : ''}
         `);
         if (userId) allParams.push(userId);
         if (startDate) allParams.push(startDate);
@@ -530,13 +530,13 @@ class DashboardController {
             payment_amount as value,
             CONCAT('Pago ref: ', payment_reference) as description,
             created_by as user_FK,
-            created_at,
+            createdAt,
             NULL as variant_FK
           FROM payment
           WHERE 1=1
           ${userId ? 'AND created_by = ?' : ''}
-          ${startDate ? 'AND DATE(created_at) >= ?' : ''}
-          ${endDate ? 'AND DATE(created_at) <= ?' : ''}
+          ${startDate ? 'AND DATE(createdAt) >= ?' : ''}
+          ${endDate ? 'AND DATE(createdAt) <= ?' : ''}
         `);
         if (userId) allParams.push(userId);
         if (startDate) allParams.push(startDate);
@@ -553,13 +553,13 @@ class DashboardController {
             NULL as value,
             login as description,
             created_by as user_FK,
-            created_at,
+            createdAt,
             NULL as variant_FK
           FROM user
           WHERE 1=1
           ${userId ? 'AND user_id = ?' : ''}
-          ${startDate ? 'AND DATE(created_at) >= ?' : ''}
-          ${endDate ? 'AND DATE(created_at) <= ?' : ''}
+          ${startDate ? 'AND DATE(createdAt) >= ?' : ''}
+          ${endDate ? 'AND DATE(createdAt) <= ?' : ''}
         `);
         if (userId) allParams.push(userId);
         if (startDate) allParams.push(startDate);
@@ -568,7 +568,7 @@ class DashboardController {
 
       // Unir todas las consultas
       const unionQuery = queries.join(' UNION ALL ');
-      const finalQuery = `${unionQuery} ORDER BY created_at DESC LIMIT ?`;
+      const finalQuery = `${unionQuery} ORDER BY createdAt DESC LIMIT ?`;
       allParams.push(parseInt(limit));
 
       const [logs] = await connect.query(finalQuery, allParams);
@@ -651,7 +651,7 @@ class DashboardController {
     const [data] = await connect.query(`
       SELECT 
         o.order_id,
-        o.created_at as fecha,
+        o.createdAt as fecha,
         o.order_total_amount as total,
         o.order_status as estado,
         CONCAT(c.first_name, ' ', c.first_last_name) as cliente,
@@ -659,8 +659,8 @@ class DashboardController {
       FROM \`order\` o
       JOIN customer c ON o.customer_FK = c.customer_id
       LEFT JOIN payment p ON o.order_id = p.order_FK
-      WHERE DATE(o.created_at) BETWEEN ? AND ?
-      ORDER BY o.created_at DESC
+      WHERE DATE(o.createdAt) BETWEEN ? AND ?
+      ORDER BY o.createdAt DESC
     `, [start, end]);
 
     return data;
@@ -691,7 +691,7 @@ class DashboardController {
         CONCAT(c.first_name, ' ', c.first_last_name) as nombre,
         u.email,
         u.activated as activo,
-        u.created_at as fecha_registro,
+        u.createdAt as fecha_registro,
         COUNT(DISTINCT o.order_id) as total_compras,
         COALESCE(SUM(o.order_total_amount), 0) as total_gastado
       FROM customer c

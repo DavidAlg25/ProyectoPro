@@ -55,32 +55,6 @@ export const showInventoryId = async (req, res) => {
   }
 };
 
-export const addInventory = async (req, res) => {
-  try {
-    const inventoryModel = new InventoryModel();
-    await inventoryModel.addInventory(req, res);
-  } catch (error) {
-    res.status(500).json({ error: "Error adding inventory", details: error.message });
-  }
-};
-
-export const updateInventory = async (req, res) => {
-  try {
-    const inventoryModel = new InventoryModel();
-    await inventoryModel.updateInventory(req, res);
-  } catch (error) {
-    res.status(500).json({ error: "Error updating inventory", details: error.message });
-  }
-};
-
-export const deleteInventory = async (req, res) => {
-  try {
-    const inventoryModel = new InventoryModel();
-    await inventoryModel.deleteInventory(req, res);
-  } catch (error) {
-    res.status(500).json({ error: "Error deleting inventory", details: error.message });
-  }
-};
 
 // InventoryMovement CRUD
 export const showInventoryMovement = async (req, res) => {
@@ -101,29 +75,3 @@ export const showInventoryMovementId = async (req, res) => {
   }
 };
 
-export const addInventoryMovement = async (req, res) => {
-  try {
-    const movementModel = new InventoryMovementModel();
-    await movementModel.addInventoryMovement(req, res);
-  } catch (error) {
-    res.status(500).json({ error: "Error adding inventory movement", details: error.message });
-  }
-};
-
-export const updateInventoryMovement = async (req, res) => {
-  try {
-    const movementModel = new InventoryMovementModel();
-    await movementModel.updateInventoryMovement(req, res);
-  } catch (error) {
-    res.status(500).json({ error: "Error updating inventory movement", details: error.message });
-  }
-};
-
-export const deleteInventoryMovement = async (req, res) => {
-  try {
-    const movementModel = new InventoryMovementModel();
-    await movementModel.deleteInventoryMovement(req, res);
-  } catch (error) {
-    res.status(500).json({ error: "Error deleting inventory movement", details: error.message });
-  }
-};

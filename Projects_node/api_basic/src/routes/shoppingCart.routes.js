@@ -2,7 +2,6 @@ import {Router} from 'express';
 import {
   getMyCart,
   clearCart,
-  processCart,
   showShoppingCart,
   showShoppingCartId,
   addShoppingCart,
@@ -31,13 +30,6 @@ router.delete('/my-cart/clear',
   verifyToken, 
   isClient,
   clearCart
-);
-
-// Procesar carrito (checkout)
-router.post('/my-cart/checkout', 
-  verifyToken, 
-  isClient,
-  processCart
 );
 
 // =============================================

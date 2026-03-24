@@ -1,6 +1,7 @@
 import { connect } from '../config/db/connect.js';
 import { encryptPassword } from '../library/appBcrypt.js';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 
 class AuthModel {
   
@@ -61,6 +62,12 @@ class AuthModel {
       'SELECT role_id FROM role WHERE role_name = "cliente"'
     );
     return result.length > 0 ? result[0].role_id : null;
+  }
+
+  // Método auxiliar para generar token aleatorio
+  generateResetToken() {
+    const crypto = require('crypto');
+    return crypto.randomBytes(32).toString('hex');
   }
 
   // REGISTRO COMPLETO (usuario + cliente + rol)
@@ -261,6 +268,88 @@ class AuthModel {
 
     } catch (error) {
       res.status(500).json({ error: "Error obteniendo perfil", details: error.message });
+    }
+  }
+
+
+// Solicitar restablecimiento de contraseña (envío de token por email)
+  async requestPasswordReset(req, res) {
+    try {
+      const { email } = req.body;
+      if (!email) return res.status(400).json({ error: "Email requerido" });
+
+      const [user] = await connect.query('SELECT user_id, login FROM user WHERE email = ?', [email]);
+      if (user.length === 0) {
+        // Por seguridad, no revelamos si el email existe o no
+        return res.json({ success: true, message: "Si el email está registrado, recibirás un enlace para restablecer tu contraseña." });
+      }
+
+      // Generar token (podría ser JWT o string aleatorio)
+      const resetToken = crypto.randomBytes(32).toString('hex');
+      const expiresAt = new Date(Date.now() + 3600000); // 1 hora
+
+      // Guardar token en BD 
+      await connect.query(
+        'UPDATE user SET reset_key = ?, reset_date = ? WHERE user_id = ?',
+        [resetToken, expiresAt, user[0].user_id]
+      );
+
+      // Aquí enviarías el correo con el enlace
+      // Ejemplo: https://tudominio.com/reset-password?token=resetToken
+      // Por ahora simulamos
+      console.log(`Enlace de restablecimiento para ${email}: /reset-password?token=${resetToken}`);
+
+      res.json({
+        success: true,
+        message: "Si el email está registrado, recibirás un enlace para restablecer tu contraseña."
+      });
+
+    } catch (error) {
+      res.status(500).json({ error: "Error solicitando restablecimiento", details: error.message });
+    }
+  }
+
+  // Restablecer contraseña con token
+  async resetPassword(req, res) {
+    let connection;
+    try {
+      const { token, newPassword } = req.body;
+      if (!token || !newPassword) {
+        return res.status(400).json({ error: "Token y nueva contraseña requeridos" });
+      }
+      if (newPassword.length < 6) {
+        return res.status(400).json({ error: "La nueva contraseña debe tener al menos 6 caracteres" });
+      }
+
+      connection = await connect.getConnection();
+      await connection.beginTransaction();
+
+      // Buscar usuario con ese token y fecha no expirada
+      const [user] = await connection.query(
+        'SELECT user_id, login FROM user WHERE reset_key = ? AND reset_date > NOW()',
+        [token]
+      );
+      if (user.length === 0) {
+        await connection.rollback();
+        return res.status(400).json({ error: "Token inválido o expirado" });
+      }
+
+      const hashedPassword = await encryptPassword(newPassword);
+
+      await connection.query(
+        'UPDATE user SET password = ?, reset_key = NULL, reset_date = NULL, last_modified_by = ? WHERE user_id = ?',
+        [hashedPassword, user[0].login, user[0].user_id]
+      );
+
+      await connection.commit();
+
+      res.json({ success: true, message: "Contraseña restablecida exitosamente" });
+
+    } catch (error) {
+      if (connection) await connection.rollback();
+      res.status(500).json({ error: "Error restableciendo contraseña", details: error.message });
+    } finally {
+      if (connection) connection.release();
     }
   }
 

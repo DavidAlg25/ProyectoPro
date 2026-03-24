@@ -1,9 +1,8 @@
 import ProductModel from '../models/product.model.js';
 
 // =============================================
-// MÉTODOS PÚBLICOS (CUALQUIER ROL PUEDE VER)
+// LISTAR PRODUCTOS (showProduct)
 // =============================================
-
 export const showProduct = async (req, res) => {
   try {
     const productModel = new ProductModel();
@@ -13,33 +12,35 @@ export const showProduct = async (req, res) => {
       req.query.onlyActive = 'true';
     }
     
-    // Verificar si quiere productos con variantes (para catálogo)
-    if (req.query.includeVariants === 'true') {
-      await productModel.getProductsWithVariants(req, res);
-    } else {
-      await productModel.showProduct(res);
-    }
+    // Usar el método existente getProductsWithVariants
+    await productModel.getProductsWithVariants(req, res);
+    
   } catch (error) {
     res.status(500).json({ error: "Error fetching Products", details: error.message });
   }
 };
 
+// =============================================
+// VER PRODUCTO POR ID (showProductId)
+// =============================================
 export const showProductId = async (req, res) => {
   try {
     const productModel = new ProductModel();
-    await productModel.showProductById(res, req);
+    
+    // Pasar el ID como query parameter para reusar getProductsWithVariants
+    req.query.productId = req.params.id;
+    await productModel.getProductsWithVariants(req, res);
+    
   } catch (error) {
     res.status(500).json({ error: "Error fetching Product", details: error.message });
   }
 };
 
 // =============================================
-// MÉTODOS SOLO PARA ADMIN (CREAR)
+// CREAR PRODUCTO (addProduct)
 // =============================================
-
 export const addProduct = async (req, res) => {
   try {
-    // Verificación adicional en el controlador
     const userRoles = req.user.roles.map(r => r.role_name);
     if (!userRoles.includes('admin')) {
       return res.status(403).json({ 
@@ -49,15 +50,15 @@ export const addProduct = async (req, res) => {
     
     const productModel = new ProductModel();
     await productModel.addProduct(req, res);
+    
   } catch (error) {
     res.status(500).json({ error: "Error adding Product", details: error.message });
   }
 };
 
 // =============================================
-// MÉTODOS SOLO PARA ADMIN (ACTUALIZAR)
+// ACTUALIZAR PRODUCTO (updateProduct)
 // =============================================
-
 export const updateProduct = async (req, res) => {
   try {
     const userRoles = req.user.roles.map(r => r.role_name);
@@ -69,15 +70,15 @@ export const updateProduct = async (req, res) => {
     
     const productModel = new ProductModel();
     await productModel.updateProduct(req, res);
+    
   } catch (error) {
     res.status(500).json({ error: "Error updating Product", details: error.message });
   }
 };
 
 // =============================================
-// MÉTODOS SOLO PARA ADMIN (ELIMINAR)
+// ELIMINAR PRODUCTO (deleteProduct)
 // =============================================
-
 export const deleteProduct = async (req, res) => {
   try {
     const userRoles = req.user.roles.map(r => r.role_name);
@@ -89,15 +90,15 @@ export const deleteProduct = async (req, res) => {
     
     const productModel = new ProductModel();
     await productModel.deleteProduct(req, res);
+    
   } catch (error) {
     res.status(500).json({ error: "Error deleting Product", details: error.message });
   }
 };
 
 // =============================================
-// MÉTODO ESPECÍFICO: Cambiar estado
+// CAMBIAR ESTADO (toggleProductStatus)
 // =============================================
-
 export const toggleProductStatus = async (req, res) => {
   try {
     const userRoles = req.user.roles.map(r => r.role_name);
@@ -109,15 +110,15 @@ export const toggleProductStatus = async (req, res) => {
     
     const productModel = new ProductModel();
     await productModel.toggleStatus(req, res);
+    
   } catch (error) {
     res.status(500).json({ error: "Error toggling product status", details: error.message });
   }
 };
 
 // =============================================
-// MÉTODO PÚBLICO: Catálogo para clientes
+// CATÁLOGO PÚBLICO (getCatalog)
 // =============================================
-
 export const getCatalog = async (req, res) => {
   try {
     const productModel = new ProductModel();
@@ -125,6 +126,7 @@ export const getCatalog = async (req, res) => {
     req.query.onlyActive = 'true';
     req.query.includeVariants = 'true';
     await productModel.getProductsWithVariants(req, res);
+    
   } catch (error) {
     res.status(500).json({ error: "Error fetching catalog", details: error.message });
   }

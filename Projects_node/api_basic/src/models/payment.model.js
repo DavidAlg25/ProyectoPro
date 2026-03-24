@@ -152,7 +152,7 @@ class PaymentModel {
          JOIN \`order\` o ON p.order_FK = o.order_id
          JOIN customer c ON o.customer_FK = c.customer_id
          WHERE c.user_FK = ?
-         ORDER BY p.created_at DESC`,
+         ORDER BY p.createdAt DESC`,
         [userId]
       );
 
@@ -230,7 +230,7 @@ class PaymentModel {
       connection = await connect.getConnection();
       await connection.beginTransaction();
 
-      const update_at = new Date().toLocaleString("en-CA", { timeZone: "America/Bogota" }).replace(",", "").replace("/", "-").replace("/", "-");
+      const update_at = new Date().toLocaleString("en-CA", { timeZone: "America/Bogota", hour12: false }).replace(",", "").replace("/", "-").replace("/", "-");
 
       const [result] = await connection.query(
         `UPDATE payment 
@@ -322,7 +322,7 @@ class PaymentModel {
         FROM payment p
         JOIN \`order\` o ON p.order_FK = o.order_id
         JOIN customer c ON o.customer_FK = c.customer_id
-        ORDER BY p.created_at DESC
+        ORDER BY p.createdAt DESC
       `);
       res.status(200).json({
         success: true,

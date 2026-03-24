@@ -223,7 +223,7 @@ class ProductPromotionModel {
       connection = await connect.getConnection();
       await connection.beginTransaction();
 
-      const update_at = new Date().toLocaleString("en-CA", { timeZone: "America/Bogota" }).replace(",", "").replace("/", "-").replace("/", "-");
+      const update_at = new Date().toLocaleString("en-CA", { timeZone: "America/Bogota", hour12: false }).replace(",", "").replace("/", "-").replace("/", "-");
 
       const [result] = await connection.query(
         `UPDATE productpromotion 

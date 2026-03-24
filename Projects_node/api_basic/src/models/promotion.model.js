@@ -75,7 +75,7 @@ class PromotionModel {
                COUNT(pp.productPromotion_id) as total_variants,
                (SELECT COUNT(*) FROM productpromotion pp2 
                 WHERE pp2.promotion_FK = p.promotion_id 
-                AND pp2.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)) as used_last_30_days
+                AND pp2.createdAt >= DATE_SUB(NOW(), INTERVAL 30 DAY)) as used_last_30_days
         FROM promotion p
         LEFT JOIN productpromotion pp ON p.promotion_id = pp.promotion_FK
         GROUP BY p.promotion_id
@@ -192,7 +192,7 @@ class PromotionModel {
       connection = await connect.getConnection();
       await connection.beginTransaction();
 
-      const update_at = new Date().toLocaleString("en-CA", { timeZone: "America/Bogota" }).replace(",", "").replace("/", "-").replace("/", "-");
+      const update_at = new Date().toLocaleString("en-CA", { timeZone: "America/Bogota", hour12: false }).replace(",", "").replace("/", "-").replace("/", "-");
 
       const [result] = await connection.query(
         `UPDATE promotion 
@@ -302,34 +302,47 @@ class PromotionModel {
 
   async showPromotionById(res, req) {
     try {
-      const [result] = await connect.query(
-        `SELECT p.*,
-                JSON_ARRAYAGG(
-                  JSON_OBJECT(
-                    'productPromotion_id', pp.productPromotion_id,
-                    'variant_id', pp.variant_FK,
-                    'product_name', pr.product_name,
-                    'size', v.size,
-                    'unit_price', v.unit_price,
-                    'created_at', pp.created_at
-                  )
-                ) as assigned_variants
-         FROM promotion p
-         LEFT JOIN productpromotion pp ON p.promotion_id = pp.promotion_FK
-         LEFT JOIN productvariants v ON pp.variant_FK = v.variant_id
-         LEFT JOIN products pr ON v.product_FK = pr.product_id
-         WHERE p.promotion_id = ?
-         GROUP BY p.promotion_id`,
-        [req.params.id]
+      const promotionId = req.params.id;
+
+      // 1. Obtener los datos de la promoción
+      const [promotion] = await connect.query(
+        `SELECT p.* 
+        FROM promotion p
+        WHERE p.promotion_id = ?`,
+        [promotionId]
       );
 
-      if (result.length === 0) return res.status(404).json({ error: "Promotion not found" });
+      if (promotion.length === 0) {
+        return res.status(404).json({ error: "Promotion not found" });
+      }
 
+      // 2. Obtener las variantes asignadas a esta promoción
+      const [assignedVariants] = await connect.query(
+        `SELECT 
+          pp.productPromotion_id,
+          pp.variant_FK as variant_id,
+          pr.product_name,
+          v.size,
+          v.unit_price,
+          pp.createdAt
+        FROM productpromotion pp
+        LEFT JOIN productvariants v ON pp.variant_FK = v.variant_id
+        LEFT JOIN products pr ON v.product_FK = pr.product_id
+        WHERE pp.promotion_FK = ?`,
+        [promotionId]
+      );
+
+      // 3. Construir la respuesta con el mismo formato original
       res.status(200).json({
         success: true,
-        data: result[0]
+        data: {
+          ...promotion[0],
+          assigned_variants: assignedVariants || []
+        }
       });
+
     } catch (error) {
+      console.error('Error en showPromotionById:', error);
       res.status(500).json({ error: "Error fetching Promotion", details: error.message });
     }
   }

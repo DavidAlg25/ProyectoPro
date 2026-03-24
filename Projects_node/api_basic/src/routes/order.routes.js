@@ -6,9 +6,8 @@ import {
   cancelMyOrder,
   showOrder,
   showOrderId,
-  addOrder,
-  updateOrder,
-  deleteOrder
+  createOrderManual,
+  updateOrder
 } from '../controllers/order.controller.js';
 import { verifyToken } from '../middleware/authMiddleware.js';
 import { authorize, isClient } from '../middleware/roleMiddleware.js';
@@ -51,14 +50,17 @@ router.put('/my-orders/:id/cancel',
 // =============================================
 // RUTAS PARA ADMIN (gestión de órdenes)
 // =============================================
+router.post('/order/manual', 
+  verifyToken,
+  authorize('admin'),
+  createOrderManual
+);
 
 router.route(apiName)
   .get(verifyToken, authorize('admin'), showOrder)
-  .post(verifyToken, authorize('admin'), addOrder);
 
 router.route(`${apiName}/:id`)
   .get(verifyToken, authorize('admin'), showOrderId)
   .put(verifyToken, authorize('admin'), updateOrder)
-  .delete(verifyToken, authorize('admin'), deleteOrder);
 
 export default router;

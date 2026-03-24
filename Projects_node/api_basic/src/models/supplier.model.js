@@ -40,7 +40,7 @@ class SupplierModel {
         SELECT s.*, 
                COUNT(po.purchaseOrder_id) as total_orders,
                COALESCE(SUM(po.purchaseOrder_totalAmount), 0) as total_purchases,
-               MAX(po.created_at) as last_purchase
+               MAX(po.createdAt) as last_purchase
         FROM supplier s
         LEFT JOIN purchaseorder po ON s.supplier_id = po.supplier_FK
         GROUP BY s.supplier_id
@@ -121,7 +121,7 @@ class SupplierModel {
       connection = await connect.getConnection();
       await connection.beginTransaction();
 
-      const update_at = new Date().toLocaleString("en-CA", { timeZone: "America/Bogota" }).replace(",", "").replace("/", "-").replace("/", "-");
+      const update_at = new Date().toLocaleString("en-CA", { timeZone: "America/Bogota", hour12: false }).replace(",", "").replace("/", "-").replace("/", "-");
 
       const [result] = await connection.query(
         `UPDATE supplier 
@@ -222,30 +222,44 @@ class SupplierModel {
 
   async showSupplierById(res, req) {
     try {
-      const [result] = await connect.query(
-        `SELECT s.*,
-                JSON_ARRAYAGG(
-                  JSON_OBJECT(
-                    'order_id', po.purchaseOrder_id,
-                    'status', po.purchaseOrder_status,
-                    'total', po.purchaseOrder_totalAmount,
-                    'date', po.created_at
-                  )
-                ) as purchase_orders
-         FROM supplier s
-         LEFT JOIN purchaseorder po ON s.supplier_id = po.supplier_FK
-         WHERE s.supplier_id = ?
-         GROUP BY s.supplier_id`,
-        [req.params.id]
+      const supplierId = req.params.id;
+
+      // 1. Obtener datos del proveedor
+      const [supplier] = await connect.query(
+        `SELECT s.* 
+        FROM supplier s
+        WHERE s.supplier_id = ?`,
+        [supplierId]
       );
 
-      if (result.length === 0) return res.status(404).json({ error: "Supplier not found" });
+      if (supplier.length === 0) {
+        return res.status(404).json({ error: "Supplier not found" });
+      }
 
+      // 2. Obtener órdenes de compra asociadas
+      const [purchaseOrders] = await connect.query(
+        `SELECT 
+          po.purchaseOrder_id as order_id,
+          po.purchaseOrder_status as status,
+          po.purchaseOrder_totalAmount as total,
+          po.createdAt as date
+        FROM purchaseorder po
+        WHERE po.supplier_FK = ?
+        ORDER BY po.createdAt DESC`,
+        [supplierId]
+      );
+
+      // 3. Construir respuesta
       res.status(200).json({
         success: true,
-        data: result[0]
+        data: {
+          ...supplier[0],
+          purchase_orders: purchaseOrders || []
+        }
       });
+
     } catch (error) {
+      console.error('Error en showSupplierById:', error);
       res.status(500).json({ error: "Error fetching Supplier", details: error.message });
     }
   }

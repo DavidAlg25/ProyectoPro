@@ -23,7 +23,7 @@ router.post('/payment/process',
   verifyToken,
   isClient,
   processPayment
-);
+); 
 
 // Ver mis pagos
 router.get('/my-payments',

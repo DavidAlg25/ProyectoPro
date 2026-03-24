@@ -3,10 +3,7 @@ import {
   getInventoryWithAlerts,
   restockInventory,
   showInventory,
-  showInventoryId,
-  addInventory,
-  updateInventory,
-  deleteInventory
+  showInventoryId
 } from '../controllers/inventory.controller.js';
 import { verifyToken } from '../middleware/authMiddleware.js';
 import { authorize } from '../middleware/roleMiddleware.js';
@@ -37,12 +34,9 @@ router.post('/inventory/restock',
 // =============================================
 
 router.route(apiName)
-  .get(verifyToken, authorize('admin'), showInventory)
-  .post(verifyToken, authorize('admin'), addInventory);
+  .get(verifyToken, authorize('admin'), showInventory);
 
 router.route(`${apiName}/:id`)
-  .get(verifyToken, authorize('admin'), showInventoryId)
-  .put(verifyToken, authorize('admin'), updateInventory)
-  .delete(verifyToken, authorize('admin'), deleteInventory);
+  .get(verifyToken, authorize('admin'), showInventoryId);
 
 export default router;

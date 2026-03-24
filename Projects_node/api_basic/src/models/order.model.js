@@ -120,11 +120,9 @@ class OrderModel {
         // Actualizar inventario (restar stock)
         await connection.query(
           `UPDATE inventory 
-           SET stock = stock - ?,
-               last_modified_by = ?,
-               updatedAt = NOW()
+           SET stock = stock - ?
            WHERE variant_FK = ?`,
-          [item.cartItem_quantity, req.user.login, item.variant_FK]
+          [item.cartItem_quantity, item.variant_FK]
         );
 
         // Registrar movimiento de inventario
@@ -132,7 +130,7 @@ class OrderModel {
           `INSERT INTO inventorymovement 
            (variant_FK, user_FK, movement_type, quantity, movement_description) 
            VALUES (?, ?, 'Salida', ?, ?)`,
-          [item.variant_FK, req.user.login, item.cartItem_quantity, 
+          [item.variant_FK, req.user.user_id, item.cartItem_quantity, 
            `Venta - Orden #${orderId}`]
         );
       }
@@ -166,31 +164,33 @@ class OrderModel {
 
   // Obtener órdenes del cliente autenticado
   async getMyOrders(req, res) {
-    try {
-      const userId = req.user.user_id;
+  try {
+    const userId = req.user.user_id;
 
-      const [orders] = await connect.query(
-        `SELECT o.*,
-                (SELECT COUNT(*) FROM orderdetail WHERE order_id = o.order_id) as item_count,
-                (SELECT SUM(order_detail_quantity * order_detail_unit_price) 
-                 FROM orderdetail WHERE order_id = o.order_id) as calculated_total,
-                (SELECT payment_status FROM payment WHERE order_FK = o.order_id LIMIT 1) as payment_status
-         FROM \`order\` o
-         JOIN customer c ON o.customer_FK = c.customer_id
-         WHERE c.user_FK = ?
-         ORDER BY o.created_at DESC`,
-        [userId]
-      );
+    const [orders] = await connect.query(
+      `SELECT o.*,
+              (SELECT COUNT(*) FROM orderdetail WHERE order_id = o.order_id) as item_count,
+              (SELECT COALESCE(SUM(order_detail_quantity * order_detail_unit_price), 0)
+               FROM orderdetail WHERE order_id = o.order_id) as calculated_total,
+              (SELECT COALESCE(payment_status, 'No pagado') 
+               FROM payment WHERE order_FK = o.order_id LIMIT 1) as order_payment_status
+       FROM \`order\` o
+       JOIN customer c ON o.customer_FK = c.customer_id
+       WHERE c.user_FK = ?
+       ORDER BY o.createdAt DESC`,
+      [userId]
+    );
 
-      res.json({
-        success: true,
-        data: orders
-      });
+    res.json({
+      success: true,
+      data: orders
+    });
 
-    } catch (error) {
-      res.status(500).json({ error: "Error fetching orders", details: error.message });
-    }
+  } catch (error) {
+    console.error('Error en getMyOrders:', error);
+    res.status(500).json({ error: "Error fetching orders", details: error.message });
   }
+}
 
   // Obtener detalle completo de una orden específica
   async getOrderDetails(req, res) {
@@ -204,37 +204,11 @@ class OrderModel {
         return res.status(403).json({ error: "No tienes permiso para ver esta orden" });
       }
 
+      // 1. Obtener información de la orden
       const [order] = await connect.query(
-        `SELECT o.*,
-                JSON_ARRAYAGG(
-                  JSON_OBJECT(
-                    'detail_id', od.order_detail_id,
-                    'variant_id', od.variant_FK,
-                    'quantity', od.order_detail_quantity,
-                    'unit_price', od.order_detail_unit_price,
-                    'subtotal', od.order_detail_quantity * od.order_detail_unit_price,
-                    'product_name', p.product_name,
-                    'size', v.size,
-                    'image_url', p.image_url
-                  )
-                ) as details,
-                JSON_ARRAYAGG(
-                  JSON_OBJECT(
-                    'payment_id', pm.payment_id,
-                    'amount', pm.payment_amount,
-                    'method', pm.payment_method,
-                    'reference', pm.payment_reference,
-                    'status', pm.payment_status,
-                    'date', pm.created_at
-                  )
-                ) as payments
-         FROM \`order\` o
-         LEFT JOIN orderdetail od ON o.order_id = od.order_id
-         LEFT JOIN productvariants v ON od.variant_FK = v.variant_id
-         LEFT JOIN products p ON v.product_FK = p.product_id
-         LEFT JOIN payment pm ON o.order_id = pm.order_FK
-         WHERE o.order_id = ?
-         GROUP BY o.order_id`,
+        `SELECT o.* 
+        FROM \`order\` o
+        WHERE o.order_id = ?`,
         [orderId]
       );
 
@@ -242,12 +216,50 @@ class OrderModel {
         return res.status(404).json({ error: "Orden no encontrada" });
       }
 
+      // 2. Obtener los detalles de la orden
+      const [details] = await connect.query(
+        `SELECT 
+          od.order_detail_id as detail_id,
+          od.variant_FK as variant_id,
+          od.order_detail_quantity as quantity,
+          od.order_detail_unit_price as unit_price,
+          (od.order_detail_quantity * od.order_detail_unit_price) as subtotal,
+          p.product_name,
+          v.size,
+          p.image_url
+        FROM orderdetail od
+        LEFT JOIN productvariants v ON od.variant_FK = v.variant_id
+        LEFT JOIN products p ON v.product_FK = p.product_id
+        WHERE od.order_id = ?`,
+        [orderId]
+      );
+
+      // 3. Obtener los pagos asociados a la orden
+      const [payments] = await connect.query(
+        `SELECT 
+          payment_id,
+          payment_amount as amount,
+          payment_method as method,
+          payment_reference as reference,
+          payment_status as status,
+          createdAt as date
+        FROM payment
+        WHERE order_FK = ?`,
+        [orderId]
+      );
+
+      // 4. Construir la respuesta
       res.json({
         success: true,
-        data: order[0]
+        data: {
+          ...order[0],
+          details: details || [],
+          payments: payments || []
+        }
       });
 
     } catch (error) {
+      console.error('Error en getOrderDetails:', error);
       res.status(500).json({ error: "Error fetching order details", details: error.message });
     }
   }
@@ -313,7 +325,7 @@ class OrderModel {
           `INSERT INTO inventorymovement 
            (variant_FK, user_FK, movement_type, quantity, movement_description) 
            VALUES (?, ?, 'Entrada', ?, ?)`,
-          [detail.variant_FK, req.user.login, detail.order_detail_quantity,
+          [detail.variant_FK, req.user.user_id, detail.order_detail_quantity,
            `Cancelación orden #${orderId}`]
         );
       }
@@ -343,42 +355,122 @@ class OrderModel {
   // MÉTODOS CRUD BASE 
   // =============================================
 
-  async addOrder(req, res) {
+  async createOrderManual(req, res) {
     let connection;
     try {
-      const { customer, order_status, totalAmount } = req.body;
+      const { 
+        customerId, 
+        order_status, 
+        payment_method, 
+        payment_amount, 
+        payment_reference,
+        items 
+      } = req.body;
 
-      if (!customer || !order_status || !totalAmount) {
-        return res.status(400).json({ error: "Missing required fields" });
+      // Validaciones básicas
+      if (!customerId || !items || !Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({ error: "Datos inválidos: se requiere customerId y al menos un item" });
       }
 
-      // VALIDACIÓN: Cliente existe
-      const customerExists = await this.validateCustomerExists(customer);
+      // Validar que customer existe
+      const customerExists = await this.validateCustomerExists(customerId);
       if (!customerExists) {
-        return res.status(400).json({ error: "El cliente no existe" });
+        return res.status(400).json({ error: "Cliente no existe" });
       }
 
       connection = await connect.getConnection();
       await connection.beginTransaction();
 
-      const [result] = await connection.query(
+      // Calcular total y validar stock
+      let totalAmount = 0;
+      for (const item of items) {
+        const { variantId, quantity, unitPrice } = item;
+        if (!variantId || !quantity || quantity <= 0 || !unitPrice || unitPrice <= 0) {
+          await connection.rollback();
+          return res.status(400).json({ error: "Item inválido" });
+        }
+
+        // Verificar stock
+        const [stock] = await connection.query(
+          'SELECT stock FROM inventory WHERE variant_FK = ?',
+          [variantId]
+        );
+        if (stock.length === 0 || stock[0].stock < quantity) {
+          await connection.rollback();
+          return res.status(400).json({ error: `Stock insuficiente para variante ${variantId}` });
+        }
+
+        totalAmount += quantity * unitPrice;
+      }
+
+      // Crear orden
+      const [orderResult] = await connection.query(
         `INSERT INTO \`order\` 
-         (customer_FK, order_status, order_total_amount, created_by) 
-         VALUES (?, ?, ?, ?)`,
-        [customer, order_status, totalAmount, req.user?.login || 'system']
+        (customer_FK, order_status, order_total_amount, created_by) 
+        VALUES (?, ?, ?, ?)`,
+        [customerId, order_status || 'Pendiente', totalAmount, req.user.login]
       );
+      const orderId = orderResult.insertId;
+
+      // Crear detalles de orden y descontar stock
+      for (const item of items) {
+        const { variantId, quantity, unitPrice } = item;
+
+        // Insertar detalle
+        await connection.query(
+          `INSERT INTO orderdetail 
+          (order_id, variant_FK, order_detail_quantity, order_detail_unit_price) 
+          VALUES (?, ?, ?, ?)`,
+          [orderId, variantId, quantity, unitPrice]
+        );
+
+        // Descontar stock
+        await connection.query(
+          `UPDATE inventory 
+          SET stock = stock - ?, last_modified_by = ?, updatedAt = NOW()
+          WHERE variant_FK = ?`,
+          [quantity, req.user.login, variantId]
+        );
+
+        // Registrar movimiento de inventario (Salida)
+        await connection.query(
+          `INSERT INTO inventorymovement 
+          (variant_FK, user_FK, movement_type, quantity, movement_description) 
+          VALUES (?, ?, 'Salida', ?, ?)`,
+          [variantId, req.user.user_id, quantity, `Venta manual - Orden #${orderId}`]
+        );
+      }
+
+      // Si se incluye pago y el monto coincide con el total, registrarlo y actualizar estado
+      if (payment_method && payment_amount && payment_amount === totalAmount) {
+        await connection.query(
+          `INSERT INTO payment 
+          (payment_amount, payment_method, payment_reference, order_FK, payment_status, created_by) 
+          VALUES (?, ?, ?, ?, 'Completado', ?)`,
+          [payment_amount, payment_method, payment_reference || null, orderId, req.user.login]
+        );
+
+        // Actualizar estado de la orden a Pagado si no lo estaba
+        if (order_status !== 'Pagado') {
+          await connection.query(
+            `UPDATE \`order\` SET order_status = 'Pagado' WHERE order_id = ?`,
+            [orderId]
+          );
+        }
+      }
 
       await connection.commit();
 
       res.status(201).json({
         success: true,
-        data: [{ id: result.insertId, customer, order_status, totalAmount }],
-        message: "Orden creada exitosamente"
+        message: "Orden creada exitosamente",
+        data: { order_id: orderId, total_amount: totalAmount, status: order_status || 'Pendiente' }
       });
 
     } catch (error) {
       if (connection) await connection.rollback();
-      res.status(500).json({ error: "Error adding Order", details: error.message });
+      console.error('Error createOrderManual:', error);
+      res.status(500).json({ error: "Error creating order", details: error.message });
     } finally {
       if (connection) connection.release();
     }
@@ -387,95 +479,72 @@ class OrderModel {
   async updateOrder(req, res) {
     let connection;
     try {
-      const { customer, order_status, totalAmount } = req.body;
+      const { order_status } = req.body; // solo permitimos cambiar estado
       const orderId = req.params.id;
 
-      if (!customer || !order_status || !totalAmount) {
-        return res.status(400).json({ error: "Missing required fields" });
+      if (!order_status) {
+        return res.status(400).json({ error: "Se requiere order_status" });
+      }
+
+      // Estados permitidos
+      const validStatus = ['Pendiente', 'Pagado', 'Cancelada'];
+      if (!validStatus.includes(order_status)) {
+        return res.status(400).json({ error: "Estado inválido" });
       }
 
       connection = await connect.getConnection();
       await connection.beginTransaction();
 
-      const update_at = new Date().toLocaleString("en-CA", { timeZone: "America/Bogota" }).replace(",", "").replace("/", "-").replace("/", "-");
+      // Obtener orden actual y verificar si tiene factura
+      const [order] = await connection.query(
+        `SELECT o.order_status, i.invoice_id 
+        FROM \`order\` o
+        LEFT JOIN invoice i ON o.order_id = i.order_FK
+        WHERE o.order_id = ?`,
+        [orderId]
+      );
+      if (order.length === 0) {
+        await connection.rollback();
+        return res.status(404).json({ error: "Orden no encontrada" });
+      }
+
+      const currentStatus = order[0].order_status;
+      const hasInvoice = order[0].invoice_id !== null;
+
+      // Reglas de negocio
+      if (hasInvoice && order_status !== 'Cancelada') {
+        await connection.rollback();
+        return res.status(400).json({ error: "Orden ya facturada, solo se puede cancelar" });
+      }
+      if (currentStatus === 'Cancelada' && order_status !== 'Cancelada') {
+        await connection.rollback();
+        return res.status(400).json({ error: "No se puede reactivar una orden cancelada" });
+      }
+      if (currentStatus === 'Pagado' && order_status !== 'Cancelada') {
+        await connection.rollback();
+        return res.status(400).json({ error: "No se puede cambiar estado de una orden pagada (excepto cancelar)" });
+      }
+
+      const update_at = new Date().toLocaleString("en-CA", { timeZone: "America/Bogota", hour12: false }).replace(",", "").replace("/", "-").replace("/", "-");
 
       const [result] = await connection.query(
         `UPDATE \`order\` 
-         SET customer_FK=?, order_status=?, order_total_amount=?, updatedAt=?, last_modified_by=?
-         WHERE order_id=?`,
-        [customer, order_status, totalAmount, update_at, req.user?.login || 'system', orderId]
+        SET order_status=?, updatedAt=?, last_modified_by=?
+        WHERE order_id=?`,
+        [order_status, update_at, req.user?.login || 'system', orderId]
       );
-
-      if (result.affectedRows === 0) {
-        await connection.rollback();
-        return res.status(404).json({ error: "Order not found" });
-      }
 
       await connection.commit();
 
       res.status(200).json({
         success: true,
-        data: [{ customer, order_status, totalAmount, update_at }],
-        message: "Orden actualizada exitosamente"
+        data: [{ order_status, update_at }],
+        message: "Estado de la orden actualizado exitosamente"
       });
 
     } catch (error) {
       if (connection) await connection.rollback();
-      res.status(500).json({ error: "Error updating Order", details: error.message });
-    } finally {
-      if (connection) connection.release();
-    }
-  }
-
-  async deleteOrder(req, res) {
-    let connection;
-    try {
-      const orderId = req.params.id;
-
-      connection = await connect.getConnection();
-      await connection.beginTransaction();
-
-      // Verificar si tiene detalles
-      const [details] = await connection.query(
-        'SELECT order_detail_id FROM orderdetail WHERE order_id = ? LIMIT 1',
-        [orderId]
-      );
-
-      if (details.length > 0) {
-        // Soft delete: solo cambiar estado
-        await connection.query(
-          'UPDATE `order` SET order_status = "Eliminado" WHERE order_id = ?',
-          [orderId]
-        );
-
-        await connection.commit();
-
-        return res.status(200).json({
-          success: true,
-          message: "Orden desactivada (tenía detalles asociados)",
-          softDelete: true
-        });
-      }
-
-      // Si no tiene detalles, eliminar físicamente
-      const [result] = await connection.query('DELETE FROM `order` WHERE order_id = ?', [orderId]);
-
-      if (result.affectedRows === 0) {
-        await connection.rollback();
-        return res.status(404).json({ error: "Order not found" });
-      }
-
-      await connection.commit();
-
-      res.status(200).json({
-        success: true,
-        message: "Orden eliminada exitosamente",
-        deleted: result.affectedRows
-      });
-
-    } catch (error) {
-      if (connection) await connection.rollback();
-      res.status(500).json({ error: "Error deleting Order", details: error.message });
+      res.status(500).json({ error: "Error updating order", details: error.message });
     } finally {
       if (connection) connection.release();
     }
@@ -492,7 +561,7 @@ class OrderModel {
         LEFT JOIN orderdetail od ON o.order_id = od.order_id
         LEFT JOIN customer c ON o.customer_FK = c.customer_id
         GROUP BY o.order_id
-        ORDER BY o.created_at DESC
+        ORDER BY o.createdAt DESC
       `);
       res.status(200).json({
         success: true,
@@ -505,31 +574,44 @@ class OrderModel {
 
   async showOrderById(res, req) {
     try {
-      const [result] = await connect.query(
-        `SELECT o.*,
-                JSON_ARRAYAGG(
-                  JSON_OBJECT(
-                    'detail_id', od.order_detail_id,
-                    'variant_id', od.variant_FK,
-                    'quantity', od.order_detail_quantity,
-                    'unit_price', od.order_detail_unit_price,
-                    'subtotal', od.order_detail_quantity * od.order_detail_unit_price
-                  )
-                ) as details
-         FROM \`order\` o
-         LEFT JOIN orderdetail od ON o.order_id = od.order_id
-         WHERE o.order_id = ?
-         GROUP BY o.order_id`,
-        [req.params.id]
+      const orderId = req.params.id;
+
+      // 1. Obtener información de la orden
+      const [order] = await connect.query(
+        `SELECT o.* 
+        FROM \`order\` o
+        WHERE o.order_id = ?`,
+        [orderId]
       );
 
-      if (result.length === 0) return res.status(404).json({ error: "Order not found" });
+      if (order.length === 0) {
+        return res.status(404).json({ error: "Order not found" });
+      }
 
+      // 2. Obtener los detalles de la orden
+      const [details] = await connect.query(
+        `SELECT 
+          od.order_detail_id as detail_id,
+          od.variant_FK as variant_id,
+          od.order_detail_quantity as quantity,
+          od.order_detail_unit_price as unit_price,
+          (od.order_detail_quantity * od.order_detail_unit_price) as subtotal
+        FROM orderdetail od
+        WHERE od.order_id = ?`,
+        [orderId]
+      );
+
+      // 3. Construir la respuesta
       res.status(200).json({
         success: true,
-        data: result[0]
+        data: {
+          ...order[0],
+          details: details || []
+        }
       });
+
     } catch (error) {
+      console.error('Error en showOrderById:', error);
       res.status(500).json({ error: "Error fetching Order", details: error.message });
     }
   }

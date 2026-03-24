@@ -1,4 +1,5 @@
 import express from 'express';
+import cors from 'cors';
 import authRoutes from '../routes/auth.routes.js';
 import cartItemRoutes from '../routes/cartItem.routes.js';
 import categoryRoutes from '../routes/category.routes.js';
@@ -8,7 +9,6 @@ import documentTypeRoutes from '../routes/documentType.routes.js';
 import inventoryRoutes from '../routes/inventory.routes.js';
 import inventoryMovementRoutes from '../routes/inventoryMovement.routes.js';
 import invoiceRoutes from '../routes/invoice.routes.js';
-import invoiceDetailRoutes from '../routes/invoiceDetail.routes.js';
 import orderRoutes from '../routes/order.routes.js';
 import orderDetailRoutes from '../routes/orderDetail.routes.js';
 import paymentRoutes from '../routes/payment.routes.js';
@@ -30,6 +30,7 @@ const app = express();
 const NAME_API = '/api/v1';
 // Middleware to handle JSON
 app.use(express.json());
+app.use(cors());
 
 // Routes for the API
 app.use(NAME_API, authRoutes);
@@ -41,7 +42,6 @@ app.use(NAME_API, documentTypeRoutes);
 app.use(NAME_API, inventoryRoutes);
 app.use(NAME_API, inventoryMovementRoutes);
 app.use(NAME_API, invoiceRoutes);
-app.use(NAME_API, invoiceDetailRoutes);
 app.use(NAME_API, orderRoutes);
 app.use(NAME_API, orderDetailRoutes);
 app.use(NAME_API, paymentRoutes);

@@ -26,7 +26,7 @@ router.get('/suppliers/stats',
 
 router.route(apiName)
   .get(verifyToken, authorize('admin'), showSupplier)
-  .post(verifyToken, authorize('admin'), addSupplier);
+  .post(verifyToken, authorize('admin'), addSupplier); 
 
 router.route(`${apiName}/:id`)
   .get(verifyToken, authorize('admin'), showSupplierId)

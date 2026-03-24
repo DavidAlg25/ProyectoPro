@@ -126,6 +126,17 @@ class InvoiceModel {
         );
       }
 
+      await connection.query(
+      `UPDATE inventorymovement 
+       SET invoice_FK = ?
+       WHERE variant_FK IN (
+         SELECT variant_FK FROM orderdetail WHERE order_id = ?
+       )
+       AND movement_type = 'Salida'
+       AND invoice_FK IS NULL`,
+      [invoiceId, orderId]
+    );
+
       await connection.commit();
 
       res.status(201).json({
@@ -158,7 +169,7 @@ class InvoiceModel {
          FROM invoice i
          JOIN customer c ON i.customer_FK = c.customer_id
          WHERE c.user_FK = ?
-         ORDER BY i.created_at DESC`,
+         ORDER BY i.createdAt DESC`,
         [userId]
       );
 
@@ -173,234 +184,126 @@ class InvoiceModel {
   }
 
   // Obtener detalle completo de una factura
-  async getInvoiceDetails(req, res) {
-    try {
-      const userId = req.user.user_id;
-      const invoiceId = req.params.id;
+async getInvoiceDetails(req, res) {
+  try {
+    const userId = req.user.user_id;
+    const invoiceId = req.params.id;
 
-      // Verificar propiedad (si es cliente)
-      const isOwner = await this.validateInvoiceOwnership(invoiceId, userId);
-      if (!isOwner && !req.user.roles.some(r => r.role_name === 'admin')) {
-        return res.status(403).json({ error: "No tienes permiso para ver esta factura" });
-      }
-
-      const [invoice] = await connect.query(
-        `SELECT i.*,
-                JSON_ARRAYAGG(
-                  JSON_OBJECT(
-                    'detail_id', id.invoice_detail_id,
-                    'variant_id', id.variant_FK,
-                    'quantity', id.quantity,
-                    'unit_price', id.unit_price,
-                    'subtotal', id.subtotal,
-                    'product_name', p.product_name,
-                    'size', v.size,
-                    'image_url', p.image_url
-                  )
-                ) as details
-         FROM invoice i
-         LEFT JOIN invoicedetail id ON i.invoice_id = id.invoice_FK
-         LEFT JOIN productvariants v ON id.variant_FK = v.variant_id
-         LEFT JOIN products p ON v.product_FK = p.product_id
-         WHERE i.invoice_id = ?
-         GROUP BY i.invoice_id`,
-        [invoiceId]
-      );
-
-      if (invoice.length === 0) {
-        return res.status(404).json({ error: "Factura no encontrada" });
-      }
-
-      res.json({
-        success: true,
-        data: invoice[0]
-      });
-
-    } catch (error) {
-      res.status(500).json({ error: "Error fetching invoice details", details: error.message });
+    // Verificar propiedad (si es cliente)
+    const isOwner = await this.validateInvoiceOwnership(invoiceId, userId);
+    if (!isOwner && !req.user.roles.some(r => r.role_name === 'admin')) {
+      return res.status(403).json({ error: "No tienes permiso para ver esta factura" });
     }
+
+    // 1. Obtener información de la factura
+    const [invoice] = await connect.query(
+      `SELECT i.* 
+       FROM invoice i
+       WHERE i.invoice_id = ?`,
+      [invoiceId]
+    );
+
+    if (invoice.length === 0) {
+      return res.status(404).json({ error: "Factura no encontrada" });
+    }
+
+    // 2. Obtener los detalles de la factura
+    const [details] = await connect.query(
+      `SELECT 
+         id.invoice_detail_id as detail_id,
+         id.variant_FK as variant_id,
+         id.quantity,
+         id.unit_price,
+         id.subtotal,
+         p.product_name,
+         v.size,
+         p.image_url
+       FROM invoicedetail id
+       LEFT JOIN productvariants v ON id.variant_FK = v.variant_id
+       LEFT JOIN products p ON v.product_FK = p.product_id
+       WHERE id.invoice_FK = ?`,
+      [invoiceId]
+    );
+
+    // 3. Construir la respuesta
+    res.json({
+      success: true,
+      data: {
+        ...invoice[0],
+        details: details || []
+      }
+    });
+
+  } catch (error) {
+    console.error('Error en getInvoiceDetails:', error);
+    res.status(500).json({ error: "Error fetching invoice details", details: error.message });
   }
+}
 
   // Anular factura (solo si no tiene movimientos asociados)
-  async cancelInvoice(req, res) {
-    let connection;
-    try {
-      const invoiceId = req.params.id;
+  // Anular factura (permite cancelar incluso si ya tiene movimientos asociados)
+async cancelInvoice(req, res) {
+  let connection;
+  try {
+    const invoiceId = req.params.id;
 
-      connection = await connect.getConnection();
-      await connection.beginTransaction();
+    connection = await connect.getConnection();
+    await connection.beginTransaction();
 
-      // Verificar si tiene movimientos de inventario
-      const [movements] = await connection.query(
-        'SELECT inventoryMovement_id FROM inventorymovement WHERE invoice_FK = ? LIMIT 1',
-        [invoiceId]
-      );
-
-      if (movements.length > 0) {
-        await connection.rollback();
-        return res.status(400).json({ 
-          error: "No se puede anular la factura porque tiene movimientos de inventario asociados" 
-        });
-      }
-
-      // Cambiar estado a "Anulada"
-      await connection.query(
-        'UPDATE invoice SET status = "Anulada", last_modified_by = ?, updatedAt = NOW() WHERE invoice_id = ?',
-        [req.user?.login || 'system', invoiceId]
-      );
-
-      await connection.commit();
-
-      res.json({
-        success: true,
-        message: "Factura anulada exitosamente"
-      });
-
-    } catch (error) {
-      if (connection) await connection.rollback();
-      res.status(500).json({ error: "Error cancelling invoice", details: error.message });
-    } finally {
-      if (connection) connection.release();
+    // 1. Obtener factura y verificar que existe
+    const [invoice] = await connection.query(
+      `SELECT i.* 
+       FROM invoice i
+       WHERE i.invoice_id = ?`,
+      [invoiceId]
+    );
+    if (invoice.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ error: "Factura no encontrada" });
     }
+
+    // 2. Verificar que no esté ya anulada
+    if (invoice[0].status === 'Anulada') {
+      await connection.rollback();
+      return res.status(400).json({ error: "La factura ya está anulada" });
+    }
+
+    // 3. (Opcional) Si quieres registrar en el log que se anula con movimientos, pero sin bloquear
+    const [movements] = await connection.query(
+      'SELECT COUNT(*) as total FROM inventorymovement WHERE invoice_FK = ?',
+      [invoiceId]
+    );
+    if (movements[0].total > 0) {
+      console.log(`Factura ${invoiceId} anulada con ${movements[0].total} movimientos asociados`);
+    }
+
+    // 4. Cambiar estado a "Anulada"
+    await connection.query(
+      'UPDATE invoice SET status = "Anulada", last_modified_by = ?, updatedAt = NOW() WHERE invoice_id = ?',
+      [req.user?.login || 'system', invoiceId]
+    );
+
+    await connection.commit();
+
+    res.json({
+      success: true,
+      message: "Factura anulada exitosamente"
+    });
+
+  } catch (error) {
+    if (connection) await connection.rollback();
+    console.error('Error cancelInvoice:', error);
+    res.status(500).json({ error: "Error cancelando factura", details: error.message });
+  } finally {
+    if (connection) connection.release();
   }
+}
 
   // =============================================
   // MÉTODOS CRUD BASE 
   // =============================================
 
-  async addInvoice(req, res) {
-    let connection;
-    try {
-      const { user, customer, order, totalAmount, status } = req.body;
-
-      if (!user || !customer || !order || !totalAmount || !status) {
-        return res.status(400).json({ error: "Missing required fields" });
-      }
-
-      connection = await connect.getConnection();
-      await connection.beginTransaction();
-
-      const [result] = await connection.query(
-        `INSERT INTO invoice 
-         (user_FK, customer_FK, order_FK, total_amount, status, created_by) 
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [user, customer, order, totalAmount, status, req.user?.login || 'system']
-      );
-
-      await connection.commit();
-
-      res.status(201).json({
-        success: true,
-        data: [{ id: result.insertId, user, customer, order, totalAmount, status }],
-        message: "Factura creada exitosamente"
-      });
-
-    } catch (error) {
-      if (connection) await connection.rollback();
-      res.status(500).json({ error: "Error adding Invoice", details: error.message });
-    } finally {
-      if (connection) connection.release();
-    }
-  }
-
-  async updateInvoice(req, res) {
-    let connection;
-    try {
-      const { user, customer, order, totalAmount, status } = req.body;
-      const invoiceId = req.params.id;
-
-      if (!user || !customer || !order || !totalAmount || !status) {
-        return res.status(400).json({ error: "Missing required fields" });
-      }
-
-      connection = await connect.getConnection();
-      await connection.beginTransaction();
-
-      const update_at = new Date().toLocaleString("en-CA", { timeZone: "America/Bogota" }).replace(",", "").replace("/", "-").replace("/", "-");
-
-      const [result] = await connection.query(
-        `UPDATE invoice 
-         SET user_FK=?, customer_FK=?, order_FK=?, total_amount=?, status=?, updatedAt=?, last_modified_by=?
-         WHERE invoice_id=?`,
-        [user, customer, order, totalAmount, status, update_at, req.user?.login || 'system', invoiceId]
-      );
-
-      if (result.affectedRows === 0) {
-        await connection.rollback();
-        return res.status(404).json({ error: "Invoice not found" });
-      }
-
-      await connection.commit();
-
-      res.status(200).json({
-        success: true,
-        data: [{ user, customer, order, totalAmount, status, update_at }],
-        message: "Factura actualizada exitosamente"
-      });
-
-    } catch (error) {
-      if (connection) await connection.rollback();
-      res.status(500).json({ error: "Error updating Invoice", details: error.message });
-    } finally {
-      if (connection) connection.release();
-    }
-  }
-
-  async deleteInvoice(req, res) {
-    let connection;
-    try {
-      const invoiceId = req.params.id;
-
-      connection = await connect.getConnection();
-      await connection.beginTransaction();
-
-      // Verificar si tiene detalles
-      const [details] = await connection.query(
-        'SELECT invoice_detail_id FROM invoicedetail WHERE invoice_FK = ? LIMIT 1',
-        [invoiceId]
-      );
-
-      if (details.length > 0) {
-        // Soft delete: cambiar estado
-        await connection.query(
-          'UPDATE invoice SET status = "Eliminada" WHERE invoice_id = ?',
-          [invoiceId]
-        );
-
-        await connection.commit();
-
-        return res.status(200).json({
-          success: true,
-          message: "Factura desactivada (tenía detalles asociados)",
-          softDelete: true
-        });
-      }
-
-      // Si no tiene detalles, eliminar físicamente
-      const [result] = await connection.query('DELETE FROM invoice WHERE invoice_id = ?', [invoiceId]);
-
-      if (result.affectedRows === 0) {
-        await connection.rollback();
-        return res.status(404).json({ error: "Invoice not found" });
-      }
-
-      await connection.commit();
-
-      res.status(200).json({
-        success: true,
-        message: "Factura eliminada exitosamente",
-        deleted: result.affectedRows
-      });
-
-    } catch (error) {
-      if (connection) await connection.rollback();
-      res.status(500).json({ error: "Error deleting Invoice", details: error.message });
-    } finally {
-      if (connection) connection.release();
-    }
-  }
-
-  async showInvoice(res) {
+   async showInvoice(res) {
     try {
       const [result] = await connect.query(`
         SELECT i.*, 
@@ -412,7 +315,7 @@ class InvoiceModel {
         LEFT JOIN customer c ON i.customer_FK = c.customer_id
         LEFT JOIN \`order\` o ON i.order_FK = o.order_id
         GROUP BY i.invoice_id
-        ORDER BY i.created_at DESC
+        ORDER BY i.createdAt DESC
       `);
       res.status(200).json({
         success: true,
@@ -425,31 +328,44 @@ class InvoiceModel {
 
   async showInvoiceById(res, req) {
     try {
-      const [result] = await connect.query(
-        `SELECT i.*,
-                JSON_ARRAYAGG(
-                  JSON_OBJECT(
-                    'detail_id', id.invoice_detail_id,
-                    'variant_id', id.variant_FK,
-                    'quantity', id.quantity,
-                    'unit_price', id.unit_price,
-                    'subtotal', id.subtotal
-                  )
-                ) as details
-         FROM invoice i
-         LEFT JOIN invoicedetail id ON i.invoice_id = id.invoice_FK
-         WHERE i.invoice_id = ?
-         GROUP BY i.invoice_id`,
-        [req.params.id]
+      const invoiceId = req.params.id;
+
+      // 1. Obtener información de la factura
+      const [invoice] = await connect.query(
+        `SELECT i.* 
+        FROM invoice i
+        WHERE i.invoice_id = ?`,
+        [invoiceId]
       );
 
-      if (result.length === 0) return res.status(404).json({ error: "Invoice not found" });
+      if (invoice.length === 0) {
+        return res.status(404).json({ error: "Invoice not found" });
+      }
 
+      // 2. Obtener los detalles de la factura
+      const [details] = await connect.query(
+        `SELECT 
+          id.invoice_detail_id as detail_id,
+          id.variant_FK as variant_id,
+          id.quantity,
+          id.unit_price,
+          id.subtotal
+        FROM invoicedetail id
+        WHERE id.invoice_FK = ?`,
+        [invoiceId]
+      );
+
+      // 3. Construir la respuesta
       res.status(200).json({
         success: true,
-        data: result[0]
+        data: {
+          ...invoice[0],
+          details: details || []
+        }
       });
+
     } catch (error) {
+      console.error('Error en showInvoiceById:', error);
       res.status(500).json({ error: "Error fetching Invoice", details: error.message });
     }
   }

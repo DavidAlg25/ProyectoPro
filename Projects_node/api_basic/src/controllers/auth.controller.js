@@ -103,6 +103,24 @@ class AuthController {
     }
   }
 
+  // auth.controller.js
+
+async requestPasswordReset(req, res) {
+  try {
+    await AuthModel.requestPasswordReset(req, res);
+  } catch (error) {
+    res.status(500).json({ error: "Error solicitando restablecimiento", details: error.message });
+  }
+}
+
+async resetPassword(req, res) {
+  try {
+    await AuthModel.resetPassword(req, res);
+  } catch (error) {
+    res.status(500).json({ error: "Error restableciendo contraseña", details: error.message });
+  }
+}
+
   // =============================================
   // LOGOUT PÚBLICO
   // =============================================

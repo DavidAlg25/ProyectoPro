@@ -9,7 +9,7 @@ export const showCustomer = async (req, res) => {
   }
 };
 
-export const showCustomerId = async (req, res) => {
+export const showCustomerId = async (res, req) => {
   try {
     const customerModel = new CustomerModel();
     customerModel.showCustomerById(req, res);

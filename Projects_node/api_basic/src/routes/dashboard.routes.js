@@ -9,7 +9,7 @@ const router = Router();
 // DASHBOARD PRINCIPAL
 // =============================================
 // Estadísticas generales para el panel
-router.get('/dashboard/stats', 
+router.get('/dashboard/stats',  
   verifyToken, 
   authorize('admin', 'vendedor', 'bodeguero'),
   dashboardController.getDashboardStats
@@ -48,7 +48,7 @@ router.get('/reports/suppliers',
 );
 
 // Reporte de productos (rendimiento)
-router.get('/reports/products',
+router.get('/report/product',
   verifyToken,
   authorize('admin'),
   dashboardController.getProductsReport

@@ -10,7 +10,7 @@ import { verifyToken } from '../middleware/authMiddleware.js';
 import { authorize } from '../middleware/roleMiddleware.js';
 
 const router = Router();
-const apiName = '/purchase-detail';
+const apiName = '/purchase-detail'; 
 
 // =============================================
 // RUTAS SOLO PARA ADMIN

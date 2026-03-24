@@ -43,34 +43,16 @@ class ShoppingCartModel {
 
       const customerId = customer[0].customer_id;
 
-      // Obtener carrito activo con sus items
+      // 1. Obtener el carrito activo
       const [cart] = await connect.query(
-        `SELECT 
-           sc.shoppingCart_id,
-           sc.shoppingCart_status,
-           JSON_ARRAYAGG(
-             JSON_OBJECT(
-               'cartItem_id', ci.cartItem_id,
-               'variant_id', ci.variant_FK,
-               'quantity', ci.cartItem_quantity,
-               'unit_price', ci.cartItem_unitPrice,
-               'product_name', p.product_name,
-               'size', v.size,
-               'image_url', p.image_url
-             )
-           ) as items,
-           SUM(ci.cartItem_quantity * ci.cartItem_unitPrice) as total
-         FROM shoppingcart sc
-         LEFT JOIN cartitem ci ON sc.shoppingCart_id = ci.shoppingCart_FK
-         LEFT JOIN productvariants v ON ci.variant_FK = v.variant_id
-         LEFT JOIN products p ON v.product_FK = p.product_id
-         WHERE sc.customer_FK = ? AND sc.shoppingCart_status = 'Activo'
-         GROUP BY sc.shoppingCart_id`,
+        `SELECT shoppingCart_id, shoppingCart_status 
+        FROM shoppingcart 
+        WHERE customer_FK = ? AND shoppingCart_status = 'Activo'`,
         [customerId]
       );
 
+      // Si no hay carrito activo, crear uno
       if (cart.length === 0) {
-        // Si no hay carrito activo, crear uno
         const [newCart] = await connect.query(
           'INSERT INTO shoppingcart (customer_FK, shoppingCart_status) VALUES (?, "Activo")',
           [customerId]
@@ -87,12 +69,44 @@ class ShoppingCartModel {
         });
       }
 
+      const cartId = cart[0].shoppingCart_id;
+
+      // 2. Obtener los items del carrito por separado
+      const [items] = await connect.query(
+        `SELECT 
+          ci.cartItem_id,
+          ci.variant_FK as variant_id,
+          ci.cartItem_quantity as quantity,
+          ci.cartItem_unitPrice as unit_price,
+          p.product_name,
+          v.size,
+          p.image_url
+        FROM cartitem ci
+        LEFT JOIN productvariants v ON ci.variant_FK = v.variant_id
+        LEFT JOIN products p ON v.product_FK = p.product_id
+        WHERE ci.shoppingCart_FK = ?`,
+        [cartId]
+      );
+
+      // 3. Calcular el total
+      let total = 0;
+      items.forEach(item => {
+        total += item.quantity * item.unit_price;
+      });
+
+      // 4. Construir la respuesta
       res.status(200).json({
         success: true,
-        data: cart[0]
+        data: {
+          shoppingCart_id: cartId,
+          shoppingCart_status: cart[0].shoppingCart_status,
+          items: items || [],
+          total: total
+        }
       });
 
     } catch (error) {
+      console.error('Error en getMyCart:', error);
       res.status(500).json({ error: "Error fetching cart", details: error.message });
     }
   }
@@ -146,80 +160,6 @@ class ShoppingCartModel {
     }
   }
 
-  // Procesar carrito (para checkout)
-  async processCart(req, res) {
-    let connection;
-    try {
-      const userId = req.user.user_id;
-
-      connection = await connect.getConnection();
-      await connection.beginTransaction();
-
-      // Obtener customer_id
-      const [customer] = await connection.query(
-        'SELECT customer_id FROM customer WHERE user_FK = ?',
-        [userId]
-      );
-
-      if (customer.length === 0) {
-        await connection.rollback();
-        return res.status(404).json({ error: "Cliente no encontrado" });
-      }
-
-      // Obtener carrito activo con items
-      const [cart] = await connection.query(
-        `SELECT sc.shoppingCart_id, 
-                ci.cartItem_id, ci.variant_FK, ci.cartItem_quantity
-         FROM shoppingcart sc
-         JOIN cartitem ci ON sc.shoppingCart_id = ci.shoppingCart_FK
-         WHERE sc.customer_FK = ? AND sc.shoppingCart_status = 'Activo'`,
-        [customer[0].customer_id]
-      );
-
-      if (cart.length === 0) {
-        await connection.rollback();
-        return res.status(400).json({ error: "El carrito está vacío" });
-      }
-
-      // Verificar stock de cada item
-      for (const item of cart) {
-        const [inventory] = await connection.query(
-          'SELECT stock FROM inventory WHERE variant_FK = ?',
-          [item.variant_FK]
-        );
-
-        if (inventory.length === 0 || inventory[0].stock < item.cartItem_quantity) {
-          await connection.rollback();
-          return res.status(400).json({ 
-            error: "Stock insuficiente para uno o más productos" 
-          });
-        }
-      }
-
-      // Marcar carrito como procesado
-      await connection.query(
-        'UPDATE shoppingcart SET shoppingCart_status = "Procesado" WHERE shoppingCart_id = ?',
-        [cart[0].shoppingCart_id]
-      );
-
-      await connection.commit();
-
-      res.json({
-        success: true,
-        message: "Carrito procesado exitosamente",
-        data: {
-          shoppingCart_id: cart[0].shoppingCart_id,
-          itemCount: cart.length
-        }
-      });
-
-    } catch (error) {
-      if (connection) await connection.rollback();
-      res.status(500).json({ error: "Error processing cart", details: error.message });
-    } finally {
-      if (connection) connection.release();
-    }
-  }
 
   // =============================================
   // MÉTODOS CRUD BASE 
@@ -284,7 +224,7 @@ class ShoppingCartModel {
       connection = await connect.getConnection();
       await connection.beginTransaction();
 
-      const update_at = new Date().toLocaleString("en-CA", { timeZone: "America/Bogota" }).replace(",", "").replace("/", "-").replace("/", "-");
+      const update_at = new Date().toLocaleString("en-CA", { timeZone: "America/Bogota", hour12: false }).replace(",", "").replace("/", "-").replace("/", "-");
 
       let sqlQuery = "UPDATE shoppingcart SET shoppingCart_status=?, customer_FK=?, updatedAt=? WHERE shoppingCart_id=?";
       const [result] = await connection.query(sqlQuery, [shoppingCart_status, customer, update_at, cartId]);
@@ -385,36 +325,59 @@ class ShoppingCartModel {
     }
   }
 
-  async showShoppingCartById(res, req) {
-    try {
-      const [result] = await connect.query(
-        `SELECT sc.*, 
-                JSON_ARRAYAGG(
-                  JSON_OBJECT(
-                    'cartItem_id', ci.cartItem_id,
-                    'variant_id', ci.variant_FK,
-                    'quantity', ci.cartItem_quantity,
-                    'unit_price', ci.cartItem_unitPrice
-                  )
-                ) as items,
-                SUM(ci.cartItem_quantity * ci.cartItem_unitPrice) as total
-         FROM shoppingcart sc
-         LEFT JOIN cartitem ci ON sc.shoppingCart_id = ci.shoppingCart_FK
-         WHERE sc.shoppingCart_id = ?
-         GROUP BY sc.shoppingCart_id`,
-        [req.params.id]
-      );
-      
-      if (result.length === 0) return res.status(404).json({ error: "ShoppingCart not found" });
-      
-      res.status(200).json({
-        success: true,
-        data: result[0]
-      });
-    } catch (error) {
-      res.status(500).json({ error: "Error fetching ShoppingCart", details: error.message });
+async showShoppingCartById(res, req) {
+  try {
+    const cartId = req.params.id;
+
+    // 1. Obtener información del carrito
+    const [cart] = await connect.query(
+      `SELECT sc.* 
+       FROM shoppingcart sc
+       WHERE sc.shoppingCart_id = ?`,
+      [cartId]
+    );
+    
+    if (cart.length === 0) {
+      return res.status(404).json({ error: "ShoppingCart not found" });
     }
+
+    // 2. Obtener los items del carrito por separado
+    const [items] = await connect.query(
+      `SELECT 
+         ci.cartItem_id,
+         ci.variant_FK as variant_id,
+         ci.cartItem_quantity as quantity,
+         ci.cartItem_unitPrice as unit_price
+       FROM cartitem ci
+       WHERE ci.shoppingCart_FK = ?`,
+      [cartId]
+    );
+
+    // 3. Calcular el total
+    let total = 0;
+    items.forEach(item => {
+      total += item.quantity * item.unit_price;
+    });
+
+    // 4. Construir la respuesta
+    res.status(200).json({
+      success: true,
+      data: {
+        shoppingCart_id: cart[0].shoppingCart_id,
+        shoppingCart_status: cart[0].shoppingCart_status,
+        customer_FK: cart[0].customer_FK,
+        created_at: cart[0].created_at,
+        updatedAt: cart[0].updatedAt,
+        items: items || [],
+        total: total
+      }
+    });
+
+  } catch (error) {
+    console.error('Error en showShoppingCartById:', error);
+    res.status(500).json({ error: "Error fetching ShoppingCart", details: error.message });
   }
+}
 }
 
 export default ShoppingCartModel;

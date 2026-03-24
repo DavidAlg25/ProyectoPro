@@ -224,7 +224,7 @@ class PurchaseDetailModel {
         JOIN purchaseorder po ON pd.purchaseOrder_FK = po.purchaseOrder_id
         JOIN productvariants v ON pd.variant_FK = v.variant_id
         JOIN products p ON v.product_FK = p.product_id
-        ORDER BY pd.created_at DESC
+        ORDER BY pd.createdAt DESC
       `);
       res.status(200).json({
         success: true,

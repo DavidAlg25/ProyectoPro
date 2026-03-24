@@ -17,7 +17,7 @@ const apiName = '/cart/items';
 // =============================================
 
 // Agregar item al carrito
-router.post('/cart/add', 
+router.post('/cart/add',  
   verifyToken, 
   isClient,
   addToCart

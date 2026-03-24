@@ -23,15 +23,6 @@ export const clearCart = async (req, res) => {
   }
 };
 
-export const processCart = async (req, res) => {
-  try {
-    const cartModel = new ShoppingCartModel();
-    await cartModel.processCart(req, res);
-  } catch (error) {
-    res.status(500).json({ error: "Error processing cart", details: error.message });
-  }
-};
-
 // =============================================
 // MÉTODOS PARA ITEMS DEL CARRITO
 // =============================================

@@ -1,17 +1,18 @@
 import {Router} from 'express';
-import {showRole,showRoleId,addRole,updateRole,deleteRole} from '../controllers/role.controller.js';
+import {showRole, showRoleId, addRole, updateRole, deleteRole} from '../controllers/role.controller.js';
 import { verifyToken } from '../middleware/authMiddleware.js';
+import { authorize } from '../middleware/roleMiddleware.js';
 
-const router=Router();
-const apiName='/role';
+const router = Router();
+const apiName = '/role';
 
-router.route(apiName)
-  .get(verifyToken, showRole)  // Get all Role
-  .post(addRole); // Add Role
+// Lectura: admin y vendedor pueden ver roles (para asignar en el panel)
+router.get(apiName, verifyToken, authorize('admin', 'vendedor'), showRole);
+router.get(`${apiName}/:id`, verifyToken, authorize('admin', 'vendedor'), showRoleId);
 
-router.route(`${apiName}/:id`)
-  .get(verifyToken, showRoleId)  // Get Role by Id
-  .put(verifyToken, updateRole)  // Update Role by Id
-  .delete(verifyToken, deleteRole); // Delete Role by Id
+// Escritura: solo admin
+router.post(apiName, verifyToken, authorize('admin'), addRole);
+router.put(`${apiName}/:id`, verifyToken, authorize('admin'), updateRole);
+router.delete(`${apiName}/:id`, verifyToken, authorize('admin'), deleteRole);
 
 export default router;

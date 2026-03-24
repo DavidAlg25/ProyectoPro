@@ -14,6 +14,10 @@ router.post(`${apiName}/login`, authController.login);
 router.post(`${apiName}/logout`, authController.logout);
 router.get(`${apiName}/activate/:token`, authController.activateAccount);
 
+// Recuperación de contraseña
+router.post(`${apiName}/forgot-password`, authController.requestPasswordReset);
+router.post(`${apiName}/reset-password`, authController.resetPassword);
+
 // =============================================
 // RUTAS PROTEGIDAS (Requieren token)
 // =============================================

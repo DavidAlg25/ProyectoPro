@@ -5,9 +5,7 @@ import {
   cancelPurchaseOrder,
   showPurchaseOrder,
   showPurchaseOrderId,
-  addPurchaseOrder,
-  updatePurchaseOrder,
-  deletePurchaseOrder
+  updatePurchaseOrder
 } from '../controllers/purchase.controller.js';
 import { verifyToken } from '../middleware/authMiddleware.js';
 import { authorize } from '../middleware/roleMiddleware.js';
@@ -30,7 +28,7 @@ router.post('/purchase-order/create',
 router.put('/purchase-order/:id/receive',
   verifyToken,
   authorize('admin'),
-  receivePurchaseOrder
+  receivePurchaseOrder 
 );
 
 // Cancelar orden de compra
@@ -42,12 +40,10 @@ router.put('/purchase-order/:id/cancel',
 
 // CRUD básico
 router.route(apiName)
-  .get(verifyToken, authorize('admin'), showPurchaseOrder)
-  .post(verifyToken, authorize('admin'), addPurchaseOrder);
+  .get(verifyToken, authorize('admin'), showPurchaseOrder);
 
 router.route(`${apiName}/:id`)
   .get(verifyToken, authorize('admin'), showPurchaseOrderId)
-  .put(verifyToken, authorize('admin'), updatePurchaseOrder)
-  .delete(verifyToken, authorize('admin'), deletePurchaseOrder);
+  .put(verifyToken, authorize('admin'), updatePurchaseOrder);
 
 export default router;

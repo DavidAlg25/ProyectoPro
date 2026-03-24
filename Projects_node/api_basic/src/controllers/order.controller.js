@@ -87,12 +87,12 @@ export const showOrderId = async (req, res) => {
   }
 };
 
-export const addOrder = async (req, res) => {
+export const createOrderManual = async (req, res) => {
   try {
     const orderModel = new OrderModel();
-    await orderModel.addOrder(req, res);
+    await orderModel.createOrderManual(req, res);
   } catch (error) {
-    res.status(500).json({ error: "Error adding order", details: error.message });
+    res.status(500).json({ error: "Error creating manual order", details: error.message });
   }
 };
 
@@ -102,15 +102,6 @@ export const updateOrder = async (req, res) => {
     await orderModel.updateOrder(req, res);
   } catch (error) {
     res.status(500).json({ error: "Error updating order", details: error.message });
-  }
-};
-
-export const deleteOrder = async (req, res) => {
-  try {
-    const orderModel = new OrderModel();
-    await orderModel.deleteOrder(req, res);
-  } catch (error) {
-    res.status(500).json({ error: "Error deleting order", details: error.message });
   }
 };
 

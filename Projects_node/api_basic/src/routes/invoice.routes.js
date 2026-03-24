@@ -6,9 +6,6 @@ import {
   cancelInvoice,
   showInvoice,
   showInvoiceId,
-  addInvoice,
-  updateInvoice,
-  deleteInvoice
 } from '../controllers/invoice.controller.js';
 import { verifyToken } from '../middleware/authMiddleware.js';
 import { authorize, isClient } from '../middleware/roleMiddleware.js';
@@ -46,13 +43,10 @@ router.get('/my-invoices/:id',
 // =============================================
 
 router.route(apiName)
-  .get(verifyToken, authorize('admin'), showInvoice)
-  .post(verifyToken, authorize('admin'), addInvoice);
+  .get(verifyToken, authorize('admin'), showInvoice);
 
 router.route(`${apiName}/:id`)
-  .get(verifyToken, authorize('admin'), showInvoiceId)
-  .put(verifyToken, authorize('admin'), updateInvoice)
-  .delete(verifyToken, authorize('admin'), deleteInvoice);
+  .get(verifyToken, authorize('admin'), showInvoiceId);
 
 // Anular factura (solo admin)
 router.put('/invoice/:id/cancel',

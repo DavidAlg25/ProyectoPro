@@ -7,7 +7,7 @@ class InventoryModel {
     this.stock = stock;
     this.min_stock = min_stock;
     this.max_stock = max_stock;
-    this.is_active = is_active;
+    this.is_active = is_active; 
   }
 
   // VALIDACIÓN: Variante existe
@@ -102,210 +102,69 @@ class InventoryModel {
     }
   }
 
-  // Reabastecer stock (compra)
+  // Reabastecer stock 
+
   async restock(req, res) {
     let connection;
     try {
-      const { variantId, quantity, description } = req.body;
+      const { variantId, quantity, description, invoiceId } = req.body;
 
       if (!variantId || !quantity || quantity <= 0) {
         return res.status(400).json({ error: "Datos inválidos" });
       }
 
-      const result = await this.updateStock(
-        variantId, 
-        quantity, 
-        'add', 
-        req.user.login, 
-        description || 'Reabastecimiento manual'
+      const userId = req.user.user_id;
+      const userName = req.user.login;
+
+      connection = await connect.getConnection();
+      await connection.beginTransaction();
+
+      // Verificar que la variante existe
+      const variantExists = await this.validateVariantExists(variantId);
+      if (!variantExists) {
+        await connection.rollback();
+        return res.status(400).json({ error: "La variante no existe" });
+      }
+
+      // Actualizar stock
+      await connection.query(
+        `UPDATE inventory 
+        SET stock = stock + ?,
+            last_modified_by = ?,
+            updatedAt = NOW()
+        WHERE variant_FK = ?`,
+        [quantity, userName, variantId]
       );
+
+      // Registrar movimiento
+      const finalDescription = description || `Reabastecimiento manual por ${userName}`;
+      await connection.query(
+        `INSERT INTO inventorymovement 
+        (variant_FK, invoice_FK, user_FK, movement_type, quantity, movement_description) 
+        VALUES (?, ?, ?, 'Entrada', ?, ?)`,
+        [variantId, invoiceId || null, userId, quantity, finalDescription]
+      );
+
+      await connection.commit();
 
       res.json({
         success: true,
         message: "Stock actualizado exitosamente",
-        data: result
+        data: { variantId, quantity, invoiceId: invoiceId || null, description: finalDescription }
       });
 
     } catch (error) {
-      res.status(500).json({ error: "Error restocking inventory", details: error.message });
+      if (connection) await connection.rollback();
+      console.error('Error restock:', error);
+      res.status(500).json({ error: "Error actualizando stock", details: error.message });
+    } finally {
+      if (connection) connection.release();
     }
   }
 
   // =============================================
   // MÉTODOS CRUD BASE 
   // =============================================
-
-  async addInventory(req, res) {
-    let connection;
-    try {
-      const { variant, stock, min_stock, max_stock, is_active } = req.body;
-
-      if (!variant || stock === undefined || !min_stock || !max_stock || is_active === undefined) {
-        return res.status(400).json({ error: "Missing required fields" });
-      }
-
-      if (stock < 0) {
-        return res.status(400).json({ error: "El stock no puede ser negativo" });
-      }
-
-      if (min_stock < 0) {
-        return res.status(400).json({ error: "El stock mínimo no puede ser negativo" });
-      }
-
-      if (max_stock <= min_stock) {
-        return res.status(400).json({ error: "El stock máximo debe ser mayor al mínimo" });
-      }
-
-      // VALIDACIÓN: Variante existe
-      const variantExists = await this.validateVariantExists(variant);
-      if (!variantExists) {
-        return res.status(400).json({ error: "La variante no existe" });
-      }
-
-      // Verificar si ya existe inventario para esta variante
-      const [existing] = await connect.query(
-        'SELECT inventory_id FROM inventory WHERE variant_FK = ?',
-        [variant]
-      );
-
-      if (existing.length > 0) {
-        return res.status(400).json({ error: "Ya existe inventario para esta variante" });
-      }
-
-      connection = await connect.getConnection();
-      await connection.beginTransaction();
-
-      const [result] = await connection.query(
-        `INSERT INTO inventory 
-         (variant_FK, stock, min_stock, max_stock, is_active, created_by) 
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [variant, stock, min_stock, max_stock, is_active, req.user?.login || 'system']
-      );
-
-      await connection.commit();
-
-      res.status(201).json({
-        success: true,
-        data: [{ id: result.insertId, variant, stock, min_stock, max_stock, is_active }],
-        message: "Inventario creado exitosamente"
-      });
-
-    } catch (error) {
-      if (connection) await connection.rollback();
-      res.status(500).json({ error: "Error adding Inventory", details: error.message });
-    } finally {
-      if (connection) connection.release();
-    }
-  }
-
-  async updateInventory(req, res) {
-    let connection;
-    try {
-      const { variant, stock, min_stock, max_stock, is_active } = req.body;
-      const inventoryId = req.params.id;
-
-      if (!variant || stock === undefined || !min_stock || !max_stock || is_active === undefined) {
-        return res.status(400).json({ error: "Missing required fields" });
-      }
-
-      if (stock < 0) {
-        return res.status(400).json({ error: "El stock no puede ser negativo" });
-      }
-
-      if (min_stock < 0) {
-        return res.status(400).json({ error: "El stock mínimo no puede ser negativo" });
-      }
-
-      if (max_stock <= min_stock) {
-        return res.status(400).json({ error: "El stock máximo debe ser mayor al mínimo" });
-      }
-
-      connection = await connect.getConnection();
-      await connection.beginTransaction();
-
-      const update_at = new Date().toLocaleString("en-CA", { timeZone: "America/Bogota" }).replace(",", "").replace("/", "-").replace("/", "-");
-
-      const [result] = await connection.query(
-        `UPDATE inventory 
-         SET variant_FK=?, stock=?, min_stock=?, max_stock=?, is_active=?, updatedAt=?, last_modified_by=?
-         WHERE inventory_id=?`,
-        [variant, stock, min_stock, max_stock, is_active, update_at, req.user?.login || 'system', inventoryId]
-      );
-
-      if (result.affectedRows === 0) {
-        await connection.rollback();
-        return res.status(404).json({ error: "Inventory not found" });
-      }
-
-      await connection.commit();
-
-      res.status(200).json({
-        success: true,
-        data: [{ variant, stock, min_stock, max_stock, is_active, update_at }],
-        message: "Inventario actualizado exitosamente"
-      });
-
-    } catch (error) {
-      if (connection) await connection.rollback();
-      res.status(500).json({ error: "Error updating Inventory", details: error.message });
-    } finally {
-      if (connection) connection.release();
-    }
-  }
-
-  async deleteInventory(req, res) {
-    let connection;
-    try {
-      const inventoryId = req.params.id;
-
-      connection = await connect.getConnection();
-      await connection.beginTransaction();
-
-      // Verificar si tiene movimientos
-      const [movements] = await connection.query(
-        'SELECT inventoryMovement_id FROM inventorymovement WHERE variant_FK = (SELECT variant_FK FROM inventory WHERE inventory_id = ?) LIMIT 1',
-        [inventoryId]
-      );
-
-      if (movements.length > 0) {
-        // Soft delete: solo desactivar
-        await connection.query(
-          'UPDATE inventory SET is_active = 0 WHERE inventory_id = ?',
-          [inventoryId]
-        );
-
-        await connection.commit();
-
-        return res.status(200).json({
-          success: true,
-          message: "Inventario desactivado (tenía movimientos asociados)",
-          softDelete: true
-        });
-      }
-
-      // Si no tiene movimientos, eliminar físicamente
-      const [result] = await connection.query('DELETE FROM inventory WHERE inventory_id = ?', [inventoryId]);
-
-      if (result.affectedRows === 0) {
-        await connection.rollback();
-        return res.status(404).json({ error: "Inventory not found" });
-      }
-
-      await connection.commit();
-
-      res.status(200).json({
-        success: true,
-        message: "Inventario eliminado exitosamente",
-        deleted: result.affectedRows
-      });
-
-    } catch (error) {
-      if (connection) await connection.rollback();
-      res.status(500).json({ error: "Error deleting Inventory", details: error.message });
-    } finally {
-      if (connection) connection.release();
-    }
-  }
 
   async showInventory(res) {
     try {

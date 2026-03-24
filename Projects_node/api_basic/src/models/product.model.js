@@ -133,7 +133,7 @@ class ProductModel {
       connection = await connect.getConnection();
       await connection.beginTransaction();
 
-      const updated_at = new Date().toLocaleString("en-CA", { timeZone: "America/Bogota" }).replace(",", "").replace("/", "-").replace("/", "-");
+      const updated_at = new Date().toLocaleString("en-CA", { timeZone: "America/Bogota", hour12: false }).replace(",", "").replace("/", "-").replace("/", "-");
       const lastModifiedBy = req.user?.login || 'system';
 
       let sqlQuery = `UPDATE products 
@@ -217,50 +217,78 @@ class ProductModel {
   }
 
   // Obtener productos con sus variantes (para catálogo)
-  async getProductsWithVariants(req, res) {
-    try {
-      const { category, onlyActive } = req.query;
-      
-      let sqlQuery = `
-        SELECT 
-          p.*,
-          JSON_ARRAYAGG(
-            JSON_OBJECT(
-              'variant_id', v.variant_id,
-              'size', v.size,
-              'unit_price', v.unit_price,
-              'status', v.status
-            )
-          ) as variants
-        FROM products p
-        LEFT JOIN productvariants v ON p.product_id = v.product_FK
-        WHERE 1=1
+async getProductsWithVariants(req, res) {
+  try {
+    const { category, onlyActive, productId } = req.query;
+    
+    // 1. Consulta base para productos
+    let productQuery = `
+      SELECT p.* 
+      FROM products p
+      WHERE 1=1
+    `;
+    
+    const productParams = [];
+    
+    if (category) {
+      productQuery += " AND p.category_FK = ?";
+      productParams.push(category);
+    }
+    
+    if (onlyActive === 'true') {
+      productQuery += " AND p.status = 'Activo'";
+    }
+    
+    if (productId) {
+      productQuery += " AND p.product_id = ?";
+      productParams.push(productId);
+    }
+    
+    // Ejecutar consulta de productos
+    const [products] = await connect.query(productQuery, productParams);
+    
+    if (products.length === 0) {
+      return res.status(200).json({
+        success: true,
+        data: []
+      });
+    }
+    
+    // 2. Para cada producto, obtener sus variantes
+    const result = [];
+    
+    for (const product of products) {
+      let variantQuery = `
+        SELECT variant_id, size, unit_price, status
+        FROM productvariants
+        WHERE product_FK = ?
       `;
       
-      const params = [];
-      
-      if (category) {
-        sqlQuery += " AND p.category_FK = ?";
-        params.push(category);
-      }
+      const variantParams = [product.product_id];
       
       if (onlyActive === 'true') {
-        sqlQuery += " AND p.status = 'Activo' AND (v.status = 'Activo' OR v.status IS NULL)";
+        variantQuery += " AND status = 'Activo'";
       }
       
-      sqlQuery += " GROUP BY p.product_id";
+      const [variants] = await connect.query(variantQuery, variantParams);
       
-      const [result] = await connect.query(sqlQuery, params);
-      
-      res.status(200).json({
-        success: true,
-        data: result
+      // Construir objeto producto con sus variantes
+      result.push({
+        ...product,
+        variants: variants || []
       });
-
-    } catch (error) {
-      res.status(500).json({ error: "Error fetching Products with variants", details: error.message });
     }
+    
+    res.status(200).json({
+      success: true,
+      data: result
+    });
+
+  } catch (error) {
+    console.error('Error en getProductsWithVariants:', error);
+    res.status(500).json({ error: "Error fetching Products with variants", details: error.message });
   }
+}
 
   // Cambiar estado del producto (activa/inactiva)
   async toggleStatus(req, res) {

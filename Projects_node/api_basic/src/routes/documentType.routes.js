@@ -1,17 +1,18 @@
 import {Router} from 'express';
-import {showDocumentType,showDocumentTypeId,addDocumentType,updateDocumentType,deleteDocumentType} from '../controllers/documentType.controller.js';
+import {showDocumentType, showDocumentTypeId, addDocumentType, updateDocumentType, deleteDocumentType} from '../controllers/documentType.controller.js';
 import { verifyToken } from '../middleware/authMiddleware.js';
+import { authorize } from '../middleware/roleMiddleware.js';
 
-const router=Router();
-const apiName='/documentType';
+const router = Router();
+const apiName = '/documentType';
 
-router.route(apiName)
-  .get(verifyToken, showDocumentType)  // Get all DocumentType
-  .post(addDocumentType); // Add DocumentType
+// Lectura: admin y vendedor pueden ver tipos de documento (para usarlos al crear cliente)
+router.get(apiName, verifyToken, authorize('admin', 'vendedor'), showDocumentType);
+router.get(`${apiName}/:id`, verifyToken, authorize('admin', 'vendedor'), showDocumentTypeId);
 
-router.route(`${apiName}/:id`)
-  .get(verifyToken, showDocumentTypeId)  // Get DocumentType by Id
-  .put(verifyToken, updateDocumentType)  // Update DocumentType by Id
-  .delete(verifyToken, deleteDocumentType); // Delete DocumentType by Id
+// Escritura: solo admin
+router.post(apiName, verifyToken, authorize('admin'), addDocumentType);
+router.put(`${apiName}/:id`, verifyToken, authorize('admin'), updateDocumentType);
+router.delete(`${apiName}/:id`, verifyToken, authorize('admin'), deleteDocumentType);
 
 export default router;

@@ -111,30 +111,12 @@ export const showPurchaseOrderId = async (req, res) => {
   }
 };
 
-export const addPurchaseOrder = async (req, res) => {
-  try {
-    const purchaseModel = new PurchaseOrderModel();
-    await purchaseModel.addPurchaseOrder(req, res);
-  } catch (error) {
-    res.status(500).json({ error: "Error adding purchase order", details: error.message });
-  }
-};
-
 export const updatePurchaseOrder = async (req, res) => {
   try {
     const purchaseModel = new PurchaseOrderModel();
     await purchaseModel.updatePurchaseOrder(req, res);
   } catch (error) {
     res.status(500).json({ error: "Error updating purchase order", details: error.message });
-  }
-};
-
-export const deletePurchaseOrder = async (req, res) => {
-  try {
-    const purchaseModel = new PurchaseOrderModel();
-    await purchaseModel.deletePurchaseOrder(req, res);
-  } catch (error) {
-    res.status(500).json({ error: "Error deleting purchase order", details: error.message });
   }
 };
 
